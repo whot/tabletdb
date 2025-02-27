@@ -1,0 +1,15 @@
+[package]
+name = "tabletdb-cli"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A CLI to interact with the tabletdb"
+keywords = ["tablet", "wacom", "cli", "linux", "wayland"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+anyhow = "1.0.96"
+clap = { version = "4.5.30", features = ["derive"] }
+log = "0.4.26"
+stderrlog = "0.6.0"
+tabletdb = { version = "0.1.0", path = "../tabletdb" }
