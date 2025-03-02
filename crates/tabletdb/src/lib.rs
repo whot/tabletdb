@@ -16,14 +16,14 @@
 //!
 //! The entry point is via a [Cache]:
 //! ```
-//! # use tabletdb::{Error, TabletBuilder, Cache};
+//! # use tabletdb::{Error, TabletInfo, Cache};
 //! # use std::path::PathBuf;
 //! # fn load()  -> Result<(), Error> {
 //! // A cache with default include paths
 //! let cache = Cache::new()?;
 //! for entry in std::fs::read_dir("/dev/input").unwrap().flatten() {
-//!     let builder = TabletBuilder::new_from_path(&entry.path())?;
-//!     cache.tablets().filter(|t| *t == &builder).for_each(|tablet| {
+//!     let info = TabletInfo::new_from_path(&entry.path())?;
+//!     cache.tablets().filter(|t| *t == &info).for_each(|tablet| {
 //!         println!("{:?}: {}", entry.path(), tablet.name());
 //!     });
 //! }
@@ -88,7 +88,7 @@ pub struct CacheBuilder {
 
 impl CacheBuilder {
     /// Create a new, empty, [CacheBuilder] without any include paths.
-    /// This builder is only needed where include paths need to be
+    /// This info is only needed where include paths need to be
     /// modified, for standard invocations use [Cache::new()].
     ///
     /// The typical invocation is
@@ -607,14 +607,13 @@ impl IntoIterator for Cache {
     }
 }
 
-/// Builder for a tablet
+/// Info about a tablet.
 ///
-/// Used to specify the bits the tablet must match
-///
+/// This struct simplifies matching against a tablet in the [Cache].
 /// The most convenient way to match an existing physical device is to use
-/// [TabletBuilder::new_from_path()].
+/// [TabletInfo::new_from_path()].
 #[derive(Debug)]
-pub struct TabletBuilder {
+pub struct TabletInfo {
     bustype: Option<BusType>,
     vid: Option<VendorId>,
     pid: Option<ProductId>,
@@ -623,9 +622,9 @@ pub struct TabletBuilder {
     uniq: Option<String>,
 }
 
-impl TabletBuilder {
-    pub fn new() -> TabletBuilder {
-        TabletBuilder {
+impl TabletInfo {
+    pub fn new() -> TabletInfo {
+        TabletInfo {
             bustype: None,
             pid: None,
             vid: None,
@@ -635,10 +634,10 @@ impl TabletBuilder {
         }
     }
 
-    /// Build a [TabletBuilder] from the device at the given path. Supports:
+    /// Build a [TabletInfo] from the device at the given path. Supports:
     /// - `/dev/input/event0` evdev event nodes
     /// - `/sys/devices/.../input/input0` sysfs input paths
-    pub fn new_from_path(path: &Path) -> Result<TabletBuilder> {
+    pub fn new_from_path(path: &Path) -> Result<TabletInfo> {
         let pathbuf = PathBuf::from(path);
         // FIXME: not the nicest approach...
         let sysfs = if pathbuf.to_string_lossy().starts_with("/dev/input/event") {
@@ -681,7 +680,7 @@ impl TabletBuilder {
             message: format!("Failed to parse pid {pid}"),
         })?;
 
-        Ok(TabletBuilder::new()
+        Ok(TabletInfo::new()
             .bustype(bustype.into())
             .vid(vid.into())
             .pid(pid.into())
@@ -744,7 +743,7 @@ impl TabletBuilder {
     }
 }
 
-impl Default for TabletBuilder {
+impl Default for TabletInfo {
     fn default() -> Self {
         Self::new()
     }
@@ -1123,32 +1122,38 @@ impl Tablet {
         self.styli.iter()
     }
 
-    pub fn matches(&self, builder: &TabletBuilder) -> bool {
-        (builder.bustype.is_none() || self.bustype == builder.bustype.unwrap())
-            && (builder.vid.is_none() || self.vid == builder.vid.unwrap())
-            && (builder.pid.is_none() || self.pid == builder.pid.unwrap())
-            && (builder.package_name.is_none()
-                || &self.name == builder.package_name.as_ref().unwrap())
-            && (builder.kernel_name.is_none()
+    /// Match a tablet against the info.
+    ///
+    /// Any field set in the [TabletInfo] is matched against the
+    /// respective field in the [Tablet] - fields unset are ignored.
+    /// The caller is required to set sufficient fields to get a
+    /// unique match, e.g. only setting the [TabletInfo::bustype()] will
+    /// match against any device with that bustype.
+    pub fn matches(&self, info: &TabletInfo) -> bool {
+        (info.bustype.is_none() || self.bustype == info.bustype.unwrap())
+            && (info.vid.is_none() || self.vid == info.vid.unwrap())
+            && (info.pid.is_none() || self.pid == info.pid.unwrap())
+            && (info.package_name.is_none() || &self.name == info.package_name.as_ref().unwrap())
+            && (info.kernel_name.is_none()
                 || self.kernel_name.is_none()
-                || self.kernel_name == builder.kernel_name)
+                || self.kernel_name == info.kernel_name)
     }
 
     // Create a fallback tablet device based on the information
-    // provided in the builder.
+    // provided in the info.
     //
     // This fallback tablet device can be used in lieu of a
     // known tablet device, e.g. where the device is too new
     // and not yet known to the tablet database.
     //
     // Creating a fallback device does not construct a [Cache].
-    pub fn new_fallback(builder: TabletBuilder) -> Tablet {
+    pub fn new_fallback(info: TabletInfo) -> Tablet {
         todo!();
     }
 }
 
-impl PartialEq<TabletBuilder> for Tablet {
-    fn eq(&self, other: &TabletBuilder) -> bool {
+impl PartialEq<TabletInfo> for Tablet {
+    fn eq(&self, other: &TabletInfo) -> bool {
         self.matches(other)
     }
 }

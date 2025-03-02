@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tabletdb::{
-    BusType, Button, Dial, Feature, Location, Ring, Strip, Stylus, Tablet, TabletBuilder, Units,
+    BusType, Button, Dial, Feature, Location, Ring, Strip, Stylus, Tablet, TabletInfo, Units,
 };
 
 #[derive(Parser, Debug)]
@@ -93,8 +93,12 @@ fn cmd_list_styli() -> Result<()> {
 fn cmd_info(path: Option<String>) -> Result<()> {
     if let Some(path) = path {
         let cache = tabletdb::Cache::new()?;
-        let builder = TabletBuilder::new_from_path(&PathBuf::from(&path))?;
-        let mut tablets = cache.tablets().filter(|t| *t == &builder).peekable();
+        let info = TabletInfo::new_from_path(&PathBuf::from(&path))?;
+        let mut tablets = cache
+            .tablets()
+            .into_iter()
+            .filter(|t| *t == &info)
+            .peekable();
         if tablets.next().is_none() {
             println!("{:?} is not a known tablet device", path);
             return Ok(());
@@ -238,20 +242,17 @@ fn cmd_list_local() -> Result<()> {
         .trim()
         .to_string();
 
-        let builder = TabletBuilder::new_from_path(&file.path())?;
-        cache
-            .tablets()
-            .filter(|t| *t == &builder)
-            .for_each(|tablet| {
-                let lookup = tablet_lookup_key(tablet);
-                locals
-                    .entry(lookup)
-                    .and_modify(|t| t.nodes.push((file.path(), name.clone())))
-                    .or_insert(LocalTablet {
-                        tablet: tablet.clone(),
-                        nodes: vec![(file.path(), name.clone())],
-                    });
-            })
+        let info = TabletInfo::new_from_path(&file.path())?;
+        cache.tablets().filter(|t| *t == &info).for_each(|tablet| {
+            let lookup = tablet_lookup_key(tablet);
+            locals
+                .entry(lookup)
+                .and_modify(|t| t.nodes.push((file.path(), name.clone())))
+                .or_insert(LocalTablet {
+                    tablet: tablet.clone(),
+                    nodes: vec![(file.path(), name.clone())],
+                });
+        })
     }
 
     for local in locals.values() {
