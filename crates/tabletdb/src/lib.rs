@@ -353,6 +353,14 @@ impl From<u16> for BusType {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct VendorId(u16);
 
+impl std::ops::Deref for VendorId {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl std::fmt::LowerHex for VendorId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let val = self.0;
@@ -389,6 +397,13 @@ impl From<u16> for VendorId {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct ProductId(pub u16);
 
+impl std::ops::Deref for ProductId {
+    type Target = u16;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl std::fmt::LowerHex for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let val = self.0;
@@ -424,6 +439,14 @@ impl From<u16> for ProductId {
 /// A 32-bit Stylus ID
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct ToolId(pub u32);
+
+impl std::ops::Deref for ToolId {
+    type Target = u32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl std::fmt::LowerHex for ToolId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
