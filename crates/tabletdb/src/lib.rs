@@ -567,9 +567,11 @@ impl Cache {
         self.tablets.iter()
     }
 
-    /// Returns an iterator over the styli available.
-    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
-        self.styli.iter()
+    pub fn styli(&self) -> Styli {
+        Styli {
+            styli: &self.styli,
+            index: 0
+        }
     }
 
     /// Find the first tablet matching all conditions in the builder.
@@ -627,14 +629,6 @@ impl Cache {
         Ok(tablet)
     }
 
-    /// Find and return the given stylus 
-    pub fn find_stylus(&self, id: StylusId) -> Option<&Stylus> {
-        let matches: Vec<&Stylus> = self
-            .styli()
-            .filter(|t| t.id == id)
-            .collect();
-        matches.first().map(|t| &**t)
-    }
 }
 
 /// Builder for a tablet
@@ -1187,6 +1181,20 @@ impl<O: TabletOwnership> Tablet<O> {
     // Creating a fallback device does not construct a [Cache].
     pub fn new_fallback(builder: TabletBuilder) -> Tablet<O> {
         todo!();
+    }
+}
+
+pub struct Styli<'a> {
+    styli: &'a Vec<Stylus>,
+    index: usize,
+}
+
+impl<'a> Iterator for Styli<'a> {
+    type Item = &'a Stylus;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.index += 1;
+        return self.styli.get(self.index - 1);
     }
 }
 
