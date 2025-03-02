@@ -14,9 +14,7 @@
 //!
 //! ## Examples
 //!
-//! The typical entry point is via a [Cache] or the [Tablet] directly. Using the [Cache]
-//! reduces the number of loads from the file system but keeps the database in memory. It is
-//! useful for querying multiple tablets in quick order:
+//! The entry point is via a [Cache]:
 //! ```
 //! # use tabletdb::{Error, TabletBuilder, Cache};
 //! # use std::path::PathBuf;
@@ -25,31 +23,14 @@
 //! let cache = Cache::new()?;
 //! for entry in std::fs::read_dir("/dev/input").unwrap().flatten() {
 //!     let builder = TabletBuilder::new_from_path(&entry.path())?;
-//!     if let Some(tablet) = cache.find_tablet(builder) {
+//!     cache.tablets().filter(|t| *t == &builder).for_each(|tablet| {
 //!         println!("{:?}: {}", entry.path(), tablet.name());
-//!     }
+//!     });
 //! }
 //! # Ok(())
 //! # }
 //! ```
 //! See the [CacheBuilder] for cases where non-default include paths are needed.
-//!
-//! In most day-to-day use-cases a cache is unnecessary, tablets are unplugged rarely
-//! and most users only have a single tablet (if any). Keeping the cache in memory is
-//! thus unnecessary. Equivalent to the above is constructing via [TabletBuilder::build()]:
-//! ```
-//! # use tabletdb::{Error, TabletBuilder, Cache};
-//! # use std::path::PathBuf;
-//! # fn load()  -> Result<(), Error> {
-//! let path = PathBuf::from("/dev/input/event0");
-//! let builder = TabletBuilder::new_from_path(&path)?;
-//! let tablet = builder.build()?.unwrap();
-//! println!("Tablet is called {}", tablet.name());
-//! # Ok(())
-//! # }
-//! ```
-//! Once the [Tablet] is constructed, the [Cache] is discarded.
-//!
 //!
 //! ## libwacom
 //! This crate is equivalent to [libwacom](https://github.com/linuxwacom/libwacom).
@@ -225,6 +206,21 @@ impl CacheBuilder {
                 .collect();
         }
 
+        let styli: Vec<Stylus> = stylus_entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, s)| Stylus {
+                idx,
+                id: s.id,
+                stylus_type: s.stylus_type,
+                eraser_type: s.eraser_type,
+                axes: s.axes,
+                name: s.name,
+                num_buttons: s.num_buttons,
+                paired_id: s.paired_ids,
+            })
+            .collect();
+
         let tablets = tablet_entries
             .into_iter()
             .enumerate()
@@ -265,32 +261,16 @@ impl CacheBuilder {
                 strips: t.strips,
                 dials: t.dials,
 
-                styli: t
-                    .styli
-                    .into_iter()
-                    .map(|r| match r {
-                        StylusRef::ID(id) => id,
-                        _ => panic!("Invalid stylus ref, should've been resolved"),
+                styli: styli
+                    .iter()
+                    .filter(|s| {
+                        t.styli.iter().any(|id| match id {
+                            StylusRef::ID(id) => &s.id == id,
+                            _ => false,
+                        })
                     })
-                    .collect::<Vec<StylusId>>(),
-
-                owned_styli: Vec::new(),
-                marker: std::marker::PhantomData,
-            })
-            .collect();
-
-        let styli: Vec<Stylus> = stylus_entries
-            .into_iter()
-            .enumerate()
-            .map(|(idx, s)| Stylus {
-                idx,
-                id: s.id,
-                stylus_type: s.stylus_type,
-                eraser_type: s.eraser_type,
-                axes: s.axes,
-                name: s.name,
-                num_buttons: s.num_buttons,
-                paired_id: s.paired_ids,
+                    .cloned()
+                    .collect::<Vec<Stylus>>(),
             })
             .collect();
 
@@ -552,7 +532,7 @@ pub enum IntegrationFlags {
     /// This flag does not usually exist on its own
     /// and is set together with [Display](IntegrationFlags::Display).
     System,
-    
+
     /// The tablet is an external remote like the
     /// Wacom ExpressKey Remote.
     Remote,
@@ -561,16 +541,32 @@ pub enum IntegrationFlags {
 /// A cache of all tablets known to this crate at the
 /// time of building the cache.
 ///
-/// Since the overwhelmingly vast majority of users do
+/// The overwhelmingly vast majority of users do
 /// not have a tablet and of the remaining portion the
 /// overwhelmingly vast majority of users only have one
-/// tablet that is plugged in once and hardly ever removed
-/// using a tablet cache is not always necessary. It may
-/// be more efficient to simply create a [Tablet] when a
-/// new device is detected.
+/// tablet that is plugged in once and hardly ever removed.
+/// Keeping the tablet cache around is not always necessary. It may
+/// be more efficient to simply get the tablet and drop the
+/// rest of the cache when a new device is detected.
+///
+/// ```
+/// # use tabletdb::{Error, Tablet, TabletInfo, Cache};
+/// # use std::path::Path;
+/// # fn load(device_path: &Path)  -> Result<(), Error> {
+/// // A cache with default include paths
+/// let cache = Cache::new()?;
+/// let info = TabletInfo::new_from_path(device_path)?;
+/// let tablets: Vec<Tablet> = cache
+///     .into_iter()
+///     .filter(|t| t == &info)
+///     .collect::<Vec<Tablet>>();
+/// let tablet: &Tablet = tablets.first().unwrap();
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Cache {
-    tablets: Vec<Tablet<BorrowedTablet>>,
+    tablets: Vec<Tablet>,
     styli: Vec<Stylus>,
 }
 
@@ -582,76 +578,33 @@ impl Cache {
         CacheBuilder::new().add_default_includes().build()
     }
 
-    /// Returns an iterator wrapper over the
-    /// tablets available.
+    /// Returns an iterator over all known tablets
     ///
-    /// This is equivalent to `libwacom_list_devices_from_database()`.
-    pub fn tablets(&self) -> impl Iterator<Item = &Tablet<BorrowedTablet>> {
+    /// Identical to [tablets()](Self::tablets).
+    pub fn iter(&self) -> impl Iterator<Item = &Tablet> {
+        self.tablets()
+    }
+
+    /// Returns an iterator over all known tablets.
+    ///
+    /// Identical to [iter()](Self::iter).
+    pub fn tablets(&self) -> impl Iterator<Item = &Tablet> {
         self.tablets.iter()
     }
 
-    pub fn styli(&self) -> Styli {
-        Styli {
-            styli: &self.styli,
-            index: 0
-        }
+    /// Returns an iterator over all known styli.
+    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
+        self.styli.iter()
     }
+}
 
-    /// Find the first tablet matching all conditions in the builder.
-    ///
-    /// If multiple tablets match the conditions, the first one is returned. It
-    /// is the responsibility of the caller to provide sufficient information
-    /// in the [TabletBuilder] to identify the tablet uniquely.
-    pub fn find_tablet(&self, builder: TabletBuilder) -> Option<&Tablet<BorrowedTablet>> {
-        let matches: Vec<&Tablet<BorrowedTablet>> = self
-            .tablets()
-            .filter(|t| builder.bustype.is_none() || t.bustype == builder.bustype.unwrap())
-            .filter(|t| builder.vid.is_none() || t.vid == builder.vid.unwrap())
-            .filter(|t| builder.pid.is_none() || t.pid == builder.pid.unwrap())
-            .filter(|t| {
-                builder.package_name.is_none() || &t.name == builder.package_name.as_ref().unwrap()
-            })
-            .filter(|t| {
-                builder.kernel_name.is_none()
-                    || t.kernel_name.is_none()
-                    || t.kernel_name == builder.kernel_name
-            })
-            .collect();
+impl IntoIterator for Cache {
+    type Item = Tablet;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
 
-        matches.first().map(|t| &**t)
+    fn into_iter(self) -> Self::IntoIter {
+        self.tablets.into_iter()
     }
-
-    /// Same as [find_tablet()][Cache::find_tablet] but discards the
-    /// cache and returns the [Tablet] to the caller.
-    ///
-    /// If the tablet cannot be found, the [Cache] is returned as error.
-    pub fn take_tablet(
-        self,
-        builder: TabletBuilder,
-    ) -> std::result::Result<Tablet<OwnedTablet>, Self> {
-        let tablet = self.find_tablet(builder);
-        if tablet.is_none() {
-            return Err(self);
-        }
-        let tablet = tablet.unwrap();
-        let tablet = self
-            .tablets()
-            .into_iter()
-            .find(|&t| t.idx == tablet.idx)
-            .unwrap()
-            .clone();
-
-        let styli = self
-            .styli
-            .into_iter()
-            .filter(|s| tablet.styli().any(|&r| r == s.id))
-            .collect::<Vec<Stylus>>();
-
-        let tablet = tablet.take_styli(styli);
-
-        Ok(tablet)
-    }
-
 }
 
 /// Builder for a tablet
@@ -788,16 +741,6 @@ impl TabletBuilder {
             self.uniq = Some(uniq);
         }
         self
-    }
-
-    /// Return the tablet (if any) that matches the given
-    /// requirements.
-    ///
-    /// This function constructs a [Cache] and discards it
-    /// immediately, even if no tablet is found.
-    pub fn build(self) -> Result<Option<Tablet<OwnedTablet>>> {
-        let cache = Cache::new()?;
-        Ok(cache.take_tablet(self).ok())
     }
 }
 
@@ -1015,26 +958,10 @@ enum StylusRef {
     ID(StylusId),
 }
 
-/// Trait for denoting whether a [Tablet] is owned or borrowed
-/// from the [Cache].
-///
-/// A borrowed tablet does not have access to the [Stylus] directly,
-/// and the cache is required to retrieve the [Stylus].
-pub trait TabletOwnership {}
-
-#[doc(hidden)]
-pub enum OwnedTablet {}
-
-#[doc(hidden)]
-#[derive(Debug, Clone)]
-pub enum BorrowedTablet {}
-
-impl TabletOwnership for OwnedTablet {}
-impl TabletOwnership for BorrowedTablet {}
-
 /// Static information about a tablet.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Tablet<O: TabletOwnership> {
+// pub struct Tablet<O: TabletOwnership> {
+pub struct Tablet {
     idx: usize,
     bustype: BusType,
     vid: VendorId,
@@ -1064,13 +991,10 @@ pub struct Tablet<O: TabletOwnership> {
     dials: Vec<Dial>,
     strips: Vec<Strip>,
 
-    styli: Vec<StylusId>,
-    owned_styli: Vec<Stylus>,
-
-    marker: std::marker::PhantomData<O>,
+    styli: Vec<Stylus>,
 }
 
-impl<O: TabletOwnership> Tablet<O> {
+impl Tablet {
     /// The "official" name of the device.
     /// This is the name given to the device by the
     /// vendor's marketing material and is
@@ -1194,6 +1118,22 @@ impl<O: TabletOwnership> Tablet<O> {
         self.strips.iter()
     }
 
+    /// Returns an iterator over the styli available on this tablet.
+    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
+        self.styli.iter()
+    }
+
+    pub fn matches(&self, builder: &TabletBuilder) -> bool {
+        (builder.bustype.is_none() || self.bustype == builder.bustype.unwrap())
+            && (builder.vid.is_none() || self.vid == builder.vid.unwrap())
+            && (builder.pid.is_none() || self.pid == builder.pid.unwrap())
+            && (builder.package_name.is_none()
+                || &self.name == builder.package_name.as_ref().unwrap())
+            && (builder.kernel_name.is_none()
+                || self.kernel_name.is_none()
+                || self.kernel_name == builder.kernel_name)
+    }
+
     // Create a fallback tablet device based on the information
     // provided in the builder.
     //
@@ -1202,69 +1142,14 @@ impl<O: TabletOwnership> Tablet<O> {
     // and not yet known to the tablet database.
     //
     // Creating a fallback device does not construct a [Cache].
-    pub fn new_fallback(builder: TabletBuilder) -> Tablet<O> {
+    pub fn new_fallback(builder: TabletBuilder) -> Tablet {
         todo!();
     }
 }
 
-pub struct Styli<'a> {
-    styli: &'a Vec<Stylus>,
-    index: usize,
-}
-
-impl<'a> Iterator for Styli<'a> {
-    type Item = &'a Stylus;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.index += 1;
-        return self.styli.get(self.index - 1);
-    }
-}
-
-impl Tablet<BorrowedTablet> {
-    /// The list of stylus ids supported by this device. Use
-    /// [Cache::find_stylus()] to retrieve the [Stylus].
-    pub fn styli(&self) -> impl Iterator<Item = &StylusId> {
-        self.styli.iter()
-    }
-
-    fn take_styli(self, styli: Vec<Stylus>) -> Tablet<OwnedTablet> {
-        Tablet {
-            idx: self.idx,
-            bustype: self.bustype,
-            vid: self.vid,
-            pid: self.pid,
-            name: self.name,
-            model_name: self.model_name,
-            kernel_name: self.kernel_name,
-            fw_version: self.fw_version,
-            width: self.width,
-            height: self.height,
-            integration_flags: self.integration_flags,
-            layout: self.layout,
-            paired_id: self.paired_id,
-
-            is_reversible: self.is_reversible,
-            has_touch: self.has_touch,
-            has_touchswitch: self.has_touchswitch,
-            has_stylus: self.has_stylus,
-            buttons: self.buttons,
-            rings: self.rings,
-            dials: self.dials,
-            strips: self.strips,
-
-            styli: Vec::new(),
-            owned_styli: styli,
-
-            marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl Tablet<OwnedTablet> {
-    /// The list of styli supported by this device.
-    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
-        self.owned_styli.iter()
+impl PartialEq<TabletBuilder> for Tablet {
+    fn eq(&self, other: &TabletBuilder) -> bool {
+        self.matches(other)
     }
 }
 

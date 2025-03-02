@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tabletdb::{
-    BusType, Button, Dial, Feature, Location, Ring, Strip, Stylus, Tablet, TabletBuilder,
-    TabletOwnership, Units,
+    BusType, Button, Dial, Feature, Location, Ring, Strip, Stylus, Tablet, TabletBuilder, Units,
 };
 
 #[derive(Parser, Debug)]
@@ -77,15 +76,9 @@ fn cmd_list_styli() -> Result<()> {
 
     println!("styli:");
     let mut styli: Vec<&Stylus> = cache.styli().collect();
-    styli.sort_by_key(|s| {
-        format!(
-            "{:04x}:{:08x}",
-            s.vendor_id(),
-            s.tool_id()
-        )
-    });
+    styli.sort_by_key(|s| format!("{:04x}:{:08x}", s.vendor_id(), s.tool_id()));
 
-    for stylus in styli {
+    for stylus in styli.iter() {
         println!(
             "- {{ vid: '0x{:04x}', pid: '0x{:08x}', name: '{}' }}",
             stylus.vendor_id(),
@@ -101,7 +94,12 @@ fn cmd_info(path: Option<String>) -> Result<()> {
     if let Some(path) = path {
         let cache = tabletdb::Cache::new()?;
         let builder = TabletBuilder::new_from_path(&PathBuf::from(&path))?;
-        if let Ok(tablet) = cache.take_tablet(builder) {
+        let mut tablets = cache.tablets().filter(|t| *t == &builder).peekable();
+        if tablets.next().is_none() {
+            println!("{:?} is not a known tablet device", path);
+            return Ok(());
+        }
+        tablets.for_each(|tablet| {
             println!("device:");
             println!("  name: \"{}\"", tablet.name());
             println!("  model_name: \"{}\"", tablet.model_name().unwrap_or(""));
@@ -199,15 +197,13 @@ fn cmd_info(path: Option<String>) -> Result<()> {
                     );
                 }
             }
-        } else {
-            println!("{:?} is not a known tablet device", path);
-        }
+        })
     }
 
     Ok(())
 }
 
-fn tablet_lookup_key<T: TabletOwnership>(tablet: &Tablet<T>) -> String {
+fn tablet_lookup_key(tablet: &Tablet) -> String {
     format!(
         "{}|{:04x}|{:04x}|{}|{}|",
         tablet.bustype(),
@@ -218,13 +214,13 @@ fn tablet_lookup_key<T: TabletOwnership>(tablet: &Tablet<T>) -> String {
     )
 }
 
-struct LocalTablet<T: TabletOwnership> {
-    tablet: Tablet<T>,
+struct LocalTablet {
+    tablet: Tablet,
     nodes: Vec<(PathBuf, String)>,
 }
 
 fn cmd_list_local() -> Result<()> {
-    let mut locals: HashMap<String, LocalTablet<_>> = HashMap::new();
+    let mut locals: HashMap<String, LocalTablet> = HashMap::new();
     let cache = tabletdb::Cache::new()?;
 
     println!("device:");
@@ -243,16 +239,19 @@ fn cmd_list_local() -> Result<()> {
         .to_string();
 
         let builder = TabletBuilder::new_from_path(&file.path())?;
-        if let Some(tablet) = cache.find_tablet(builder) {
-            let lookup = tablet_lookup_key(tablet);
-            locals
-                .entry(lookup)
-                .and_modify(|t| t.nodes.push((file.path(), name.clone())))
-                .or_insert(LocalTablet {
-                    tablet: tablet.clone(),
-                    nodes: vec![(file.path(), name)],
-                });
-        }
+        cache
+            .tablets()
+            .filter(|t| *t == &builder)
+            .for_each(|tablet| {
+                let lookup = tablet_lookup_key(tablet);
+                locals
+                    .entry(lookup)
+                    .and_modify(|t| t.nodes.push((file.path(), name.clone())))
+                    .or_insert(LocalTablet {
+                        tablet: tablet.clone(),
+                        nodes: vec![(file.path(), name.clone())],
+                    });
+            })
     }
 
     for local in locals.values() {
