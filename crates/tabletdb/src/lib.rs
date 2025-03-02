@@ -1138,18 +1138,6 @@ impl Tablet {
                 || self.kernel_name.is_none()
                 || self.kernel_name == info.kernel_name)
     }
-
-    // Create a fallback tablet device based on the information
-    // provided in the info.
-    //
-    // This fallback tablet device can be used in lieu of a
-    // known tablet device, e.g. where the device is too new
-    // and not yet known to the tablet database.
-    //
-    // Creating a fallback device does not construct a [Cache].
-    pub fn new_fallback(info: TabletInfo) -> Tablet {
-        todo!();
-    }
 }
 
 impl PartialEq<TabletInfo> for Tablet {
