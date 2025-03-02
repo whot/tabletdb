@@ -48,13 +48,13 @@ fn cmd_list_tablets() -> Result<()> {
     let cache = tabletdb::Cache::new()?;
     println!("devices:");
 
-    let mut tablets: Vec<&Tablet<_>> = cache.tablets().collect();
+    let mut tablets: Vec<&Tablet> = cache.tablets().collect();
     tablets.sort_by_key(|t| {
         format!(
             "{}:{:04x}:{:04x}",
             t.bustype(),
-            u16::from(t.vendor_id()),
-            u16::from(t.product_id())
+            t.vendor_id(),
+            t.product_id()
         )
     });
 
@@ -62,8 +62,8 @@ fn cmd_list_tablets() -> Result<()> {
         println!(
             "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}', uniq: '{}' }}",
             format!("'{}',", tablet.bustype()),
-            u16::from(tablet.vendor_id()),
-            u16::from(tablet.product_id()),
+            *tablet.vendor_id(),
+            tablet.product_id(),
             tablet.name(),
             tablet.firmware_version().unwrap_or("")
         );
@@ -80,16 +80,16 @@ fn cmd_list_styli() -> Result<()> {
     styli.sort_by_key(|s| {
         format!(
             "{:04x}:{:08x}",
-            u16::from(s.vendor_id()),
-            u32::from(s.tool_id())
+            s.vendor_id(),
+            s.tool_id()
         )
     });
 
     for stylus in styli {
         println!(
             "- {{ vid: '0x{:04x}', pid: '0x{:08x}', name: '{}' }}",
-            u16::from(stylus.vendor_id()),
-            u32::from(stylus.tool_id()),
+            stylus.vendor_id(),
+            stylus.tool_id(),
             stylus.name()
         );
     }
@@ -127,8 +127,8 @@ fn cmd_info(path: Option<String>) -> Result<()> {
                     BusType::Unknown { .. } => "unknown",
                 }
             );
-            println!("  vid: \"0x{:04x}\"", u16::from(tablet.vendor_id()));
-            println!("  pid: \"0x{:04x}\"", u16::from(tablet.product_id()));
+            println!("  vid: \"0x{:04x}\"", tablet.vendor_id());
+            println!("  pid: \"0x{:04x}\"", tablet.product_id());
             println!("  width: {}", tablet.width().inches());
             println!("  height: {}", tablet.height().inches());
             println!("  reversible: {}", tablet.is_reversible());
@@ -211,8 +211,8 @@ fn tablet_lookup_key<T: TabletOwnership>(tablet: &Tablet<T>) -> String {
     format!(
         "{}|{:04x}|{:04x}|{}|{}|",
         tablet.bustype(),
-        u16::from(tablet.vendor_id()),
-        u16::from(tablet.product_id()),
+        tablet.vendor_id(),
+        tablet.product_id(),
         tablet.name(),
         tablet.firmware_version().unwrap_or("")
     )
@@ -259,8 +259,8 @@ fn cmd_list_local() -> Result<()> {
         let tablet = &local.tablet;
         println!("- name: '{}'", tablet.name());
         println!("  bus: '{}'", tablet.bustype());
-        println!("  vid: '0x{:04x}'", u16::from(tablet.vendor_id()));
-        println!("  pid: '0x{:04x}'", u16::from(tablet.product_id()));
+        println!("  vid: '0x{:04x}'", tablet.vendor_id());
+        println!("  pid: '0x{:04x}'", tablet.product_id());
         println!("  nodes:");
         for node in local.nodes.iter() {
             println!("  - {}: '{}'", node.0.to_string_lossy(), node.1);
