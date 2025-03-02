@@ -4,7 +4,7 @@
 //! It provides **static** information about tablets that cannot be obtained from
 //! the kernel device itself and can help with:
 //! - checking which axes are actually available on a given tool (the kernel exports all *possible*
-//! axes across all supported tools on a tablet)
+//!   axes across all supported tools on a tablet)
 //! - checking whether a tablet needs to be mapped to a screen, and helping decide which screen
 //! - provides a detailed (SVG) and rough (top/bottom/left/right) layout of the button positions
 //!

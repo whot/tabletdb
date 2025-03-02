@@ -301,12 +301,12 @@ impl TabletFile {
             .split(";")
             .filter(|s| !s.is_empty())
             .flat_map(|s| match s {
-                    "Display" => Some(IntegrationFlags::Display),
-                    "System" => Some(IntegrationFlags::System),
-                    "Remote" => Some(IntegrationFlags::Remote),
-                    _ => None,
-                }
-            ).collect();
+                "Display" => Some(IntegrationFlags::Display),
+                "System" => Some(IntegrationFlags::System),
+                "Remote" => Some(IntegrationFlags::Remote),
+                _ => None,
+            })
+            .collect();
 
         let styli: Vec<StylusRef> = data
             .get("Device", "Styli")
@@ -315,8 +315,8 @@ impl TabletFile {
             .flatten()
             .filter(|s| !s.is_empty())
             .map(|s| {
-                if s.starts_with("@") {
-                    Ok(StylusRef::Group(String::from(&s[1..])))
+                if let Some(s) = s.strip_prefix("@") {
+                    Ok(StylusRef::Group(String::from(s)))
                 } else {
                     parse_stylus_id(s).map(StylusRef::ID)
                 }
