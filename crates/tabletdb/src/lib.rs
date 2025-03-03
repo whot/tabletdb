@@ -266,15 +266,21 @@ impl CacheBuilder {
         }
 
         let styli: Vec<Stylus> = stylus_entries
-            .into_iter()
+            .iter()
             .enumerate()
+            .filter(|(_, entry)| {
+                entry
+                    .paired_ids
+                    .map(|id| stylus_entries.iter().any(|p| p.id == id))
+                    .unwrap_or(true)
+            })
             .map(|(idx, s)| Stylus {
                 idx,
                 id: s.id,
                 stylus_type: s.stylus_type,
                 eraser_type: s.eraser_type,
                 axes: s.axes,
-                name: s.name,
+                name: s.name.clone(),
                 num_buttons: s.num_buttons,
                 paired_id: s.paired_ids,
             })
@@ -332,10 +338,6 @@ impl CacheBuilder {
                     .collect::<Vec<Stylus>>(),
             })
             .collect();
-
-        // FIXME:
-        // Styli:
-        // - resolve PairedIds and remove where the respective one doesnt exist
 
         Ok(Cache { tablets, styli })
     }
