@@ -708,16 +708,22 @@ impl TabletInfo {
     /// - `/dev/input/event0` evdev event nodes
     /// - `/sys/devices/.../input/input0` sysfs input paths
     pub fn new_from_path(path: &Path) -> Result<TabletInfo> {
-        let pathbuf = PathBuf::from(path);
-        // FIXME: not the nicest approach...
-        let sysfs = if pathbuf.to_string_lossy().starts_with("/dev/input/event") {
-            let node = pathbuf.file_name().ok_or(Error::InvalidArgument {
-                message: format!("Invalid path {pathbuf:?}"),
+        let sysfs = if path.starts_with("/dev/input")
+            && path.is_file()
+            && path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("event")
+        {
+            let node = path.file_name().ok_or(Error::InvalidArgument {
+                message: format!("Invalid path {path:?}"),
             })?;
             PathBuf::from("/sys/class/input")
                 .join(node)
                 .join(String::from("device"))
-        } else if pathbuf.starts_with("/sys") && pathbuf.as_path().is_dir() {
+        } else if path.starts_with("/sys") && path.is_dir() {
+            let pathbuf = PathBuf::from(path);
             if pathbuf.join("id").as_path().is_dir() {
                 pathbuf
             } else {
@@ -725,7 +731,7 @@ impl TabletInfo {
             }
         } else {
             return Err(Error::InvalidArgument {
-                message: format!("Don't know how to handle {pathbuf:?}"),
+                message: format!("Don't know how to handle {path:?}"),
             });
         };
 
