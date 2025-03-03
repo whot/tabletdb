@@ -744,7 +744,7 @@ impl TabletInfo {
         let mut name = String::new();
         std::fs::File::open(sysfs.join("name"))?.read_to_string(&mut name)?;
         let mut uniq = String::new();
-        std::fs::File::open(sysfs.join("name"))?.read_to_string(&mut uniq)?;
+        std::fs::File::open(sysfs.join("uniq"))?.read_to_string(&mut uniq)?;
 
         let bustype = u16::from_str_radix(bustype.as_str().trim(), 16).map_err(|_| Error::IO {
             message: format!("Failed to parse bustype {bustype}"),
