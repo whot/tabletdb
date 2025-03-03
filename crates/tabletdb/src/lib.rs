@@ -265,24 +265,52 @@ impl CacheBuilder {
                 .collect();
         }
 
-        let styli: Vec<Stylus> = stylus_entries
+        let tools: Vec<Tool> = stylus_entries
             .iter()
             .enumerate()
+            // Filter out any tools with non-existing paired ids
             .filter(|(_, entry)| {
                 entry
                     .paired_ids
                     .map(|id| stylus_entries.iter().any(|p| p.id == id))
                     .unwrap_or(true)
             })
-            .map(|(idx, s)| Stylus {
-                idx,
-                id: s.id,
-                stylus_type: s.stylus_type,
-                eraser_type: s.eraser_type,
-                axes: s.axes,
-                name: s.name.clone(),
-                num_buttons: s.num_buttons,
-                paired_id: s.paired_ids,
+            // Filter any invert erasers, we map those directl
+            .filter(|(_, entry)| entry.eraser_type != Some(EraserType::Invert))
+            .map(|(idx, s)| {
+                let stylus = Stylus {
+                    idx,
+                    id: s.id,
+                    tool_type: s.tool_type,
+                    eraser_type: s.eraser_type,
+                    axes: s.axes,
+                    name: s.name.clone(),
+                    num_buttons: s.num_buttons,
+                };
+                // This is really bad in the data files. A tool
+                // without a paired ID is always a stylus or an
+                // eraser but only the eraser has the EraserType
+                // set.
+                if s.eraser_type.is_none_or(|t| t == EraserType::Button) {
+                    Tool::Stylus(stylus)
+                } else {
+                    let paired_id = s.paired_ids.unwrap();
+                    let eraser: Eraser = stylus_entries
+                        .iter()
+                        .filter(|e| e.id == paired_id)
+                        .map(|e| Eraser {
+                            idx,
+                            id: e.id,
+                            tool_type: e.tool_type,
+                            eraser_type: e.eraser_type.unwrap(),
+                            axes: e.axes,
+                            name: e.name.clone(),
+                        })
+                        .take(1)
+                        .next()
+                        .unwrap();
+                    Tool::StylusWithEraser(stylus, eraser)
+                }
             })
             .collect();
 
@@ -326,20 +354,22 @@ impl CacheBuilder {
                 strips: t.strips,
                 dials: t.dials,
 
-                styli: styli
+                tools: tools
                     .iter()
-                    .filter(|s| {
+                    .filter(|tool| {
                         t.styli.iter().any(|id| match id {
-                            StylusRef::ID(id) => &s.id == id,
+                            StylusRef::ID(id) => {
+                                tool.vendor_id() == id.vendor_id() && tool.tool_id() == id.tool_id()
+                            }
                             _ => false,
                         })
                     })
                     .cloned()
-                    .collect::<Vec<Stylus>>(),
+                    .collect::<Vec<Tool>>(),
             })
             .collect();
 
-        Ok(Cache { tablets, styli })
+        Ok(Cache { tablets, tools })
     }
 }
 
@@ -637,7 +667,7 @@ pub enum IntegrationFlags {
 #[derive(Debug, Clone)]
 pub struct Cache {
     tablets: Vec<Tablet>,
-    styli: Vec<Stylus>,
+    tools: Vec<Tool>,
 }
 
 impl Cache {
@@ -663,8 +693,8 @@ impl Cache {
     }
 
     /// Returns an iterator over all known styli.
-    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
-        self.styli.iter()
+    pub fn tools(&self) -> impl Iterator<Item = &Tool> {
+        self.tools.iter()
     }
 }
 
@@ -1075,7 +1105,7 @@ pub struct Tablet {
     dials: Vec<Dial>,
     strips: Vec<Strip>,
 
-    styli: Vec<Stylus>,
+    tools: Vec<Tool>,
 }
 
 impl Tablet {
@@ -1203,8 +1233,8 @@ impl Tablet {
     }
 
     /// Returns an iterator over the styli available on this tablet.
-    pub fn styli(&self) -> impl Iterator<Item = &Stylus> {
-        self.styli.iter()
+    pub fn tools(&self) -> impl Iterator<Item = &Tool> {
+        self.tools.iter()
     }
 
     /// Match a tablet against the info.
@@ -1233,7 +1263,7 @@ impl PartialEq<TabletInfo> for Tablet {
 
 /// An approximate description of the stylus type
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum StylusType {
+pub enum ToolType {
     Unknown,
     /// A standard pen-like stylus
     General,
@@ -1255,8 +1285,7 @@ pub enum StylusType {
 
 /// Type of eraser on a stylus
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum EraserType {
-    Unknown,
+enum EraserType {
     /// Eraser is a separate tool on the opposite end of the stylus
     Invert,
     /// Eraser is a button alongside any other stylus buttons
@@ -1275,45 +1304,177 @@ bitflags! {
     }
 }
 
+pub trait ToolFeatures {
+    /// The name of this tool given by the manufacturer,
+    /// e.g. "Grip Pen". This name is suitable for presentation.
+    ///
+    /// This name may not be unique.
+    fn name(&self) -> &str;
+    fn vendor_id(&self) -> VendorId;
+    fn tool_id(&self) -> ToolId;
+    fn tool_type(&self) -> ToolType;
+
+    fn has_tilt(&self) -> bool;
+    fn has_pressure(&self) -> bool;
+    fn has_distance(&self) -> bool;
+    fn has_rotation(&self) -> bool;
+    fn has_slider(&self) -> bool;
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Tool {
+    /// A stylus-like tool without an eraser at the other entry.
+    ///
+    /// Such a stylus may have an eraser button, see [Stylus::has_eraser_button()],
+    /// and *behave* like an eraser when that button is pressed. However, that
+    /// eraser does not appear as separate tool in the system.
+    Stylus(Stylus),
+    /// A stylus-like tool with an eraser at the back.
+    ///
+    /// Such a stylus must not have an [eraser button](Stylus::has_eraser_button())
+    /// and inverting the stylus will present the [Eraser] tool. This tool may
+    /// have a different [VendorId] and [ToolId] to the [Stylus].
+    StylusWithEraser(Stylus, Eraser),
+}
+
+impl Tool {
+    /// A convenience method wrapping [Stylus::name()] for this tool,
+    /// ignoring the eraser (if any)
+    pub fn name(&self) -> &str {
+        match self {
+            Tool::Stylus(s) => s.name(),
+            Tool::StylusWithEraser(_, e) => e.name(),
+        }
+    }
+    /// A convenience method wrapping [Stylus::vendor_id()] for this tool,
+    /// ignoring the eraser (if any)
+    pub fn vendor_id(&self) -> VendorId {
+        match self {
+            Tool::Stylus(s) => s.vendor_id(),
+            Tool::StylusWithEraser(_, e) => e.vendor_id(),
+        }
+    }
+    /// A convenience method wrapping [Stylus::tool_id()] for this tool,
+    /// ignoring the eraser (if any)
+    pub fn tool_id(&self) -> ToolId {
+        match self {
+            Tool::Stylus(s) => s.tool_id(),
+            Tool::StylusWithEraser(_, e) => e.tool_id(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Eraser {
+    idx: usize,
+    name: String,
+    id: StylusId,
+    tool_type: ToolType,
+    eraser_type: EraserType,
+    axes: AxisTypes,
+}
+
+impl ToolFeatures for Eraser {
+    /// The name of this eraser given by the manufacturer,
+    /// e.g. "Grip Pen". This name is suitable for presentation.
+    ///
+    /// This name may not be unique. Using this name is not
+    /// usually required, the eraser does not live without
+    /// its corresponding stylus and the stylus name is a better
+    /// option for presentation.
+    fn name(&self) -> &str {
+        &self.name
+    }
+    /// The vendor ID of the eraser. Theoretically this may
+    /// be different to the [Stylus::vendor_id()] but no
+    /// such devices have been observed in the wild yet.
+    fn vendor_id(&self) -> VendorId {
+        self.id.vid
+    }
+    /// The tool ID of the eraser.
+    fn tool_id(&self) -> ToolId {
+        self.id.pid
+    }
+    fn has_tilt(&self) -> bool {
+        self.axes.contains(AxisTypes::Tilt)
+    }
+    fn has_pressure(&self) -> bool {
+        self.axes.contains(AxisTypes::Pressure)
+    }
+    fn has_distance(&self) -> bool {
+        self.axes.contains(AxisTypes::Distance)
+    }
+    fn has_rotation(&self) -> bool {
+        self.axes.contains(AxisTypes::RotationZ)
+    }
+    fn has_slider(&self) -> bool {
+        self.axes.contains(AxisTypes::Slider)
+    }
+    fn tool_type(&self) -> ToolType {
+        self.tool_type
+    }
+}
+
 /// A stylus describes one tool available on a tablet.
 ///
-/// Not all [Stylus] tools are phsyically styli-like, e.g. the Wacom Lens Cursor
+/// Not all [Stylus] tools are physically styli-like, e.g. the Wacom Lens Cursor
 /// is a mouse-like device.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylus {
     idx: usize,
     name: String,
     id: StylusId,
-    stylus_type: StylusType,
+    tool_type: ToolType,
     eraser_type: Option<EraserType>,
     num_buttons: usize,
     axes: AxisTypes,
-    paired_id: Option<StylusId>,
 }
 
-impl Stylus {
+impl ToolFeatures for Stylus {
     /// The name of this stylus given by the manufacturer,
     /// e.g. "Grip Pen". This name is suitable for presentation.
     ///
     /// This name may not be unique.
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         &self.name
     }
-    pub fn vendor_id(&self) -> VendorId {
+    fn vendor_id(&self) -> VendorId {
         self.id.vid
     }
-    pub fn tool_id(&self) -> ToolId {
+    fn tool_id(&self) -> ToolId {
         self.id.pid
     }
-    pub fn stylus_type(&self) -> StylusType {
-        self.stylus_type
+    fn has_tilt(&self) -> bool {
+        self.axes.contains(AxisTypes::Tilt)
     }
-    pub fn eraser_type(&self) -> Option<EraserType> {
-        self.eraser_type
+    fn has_pressure(&self) -> bool {
+        self.axes.contains(AxisTypes::Pressure)
+    }
+    fn has_distance(&self) -> bool {
+        self.axes.contains(AxisTypes::Distance)
+    }
+    fn has_rotation(&self) -> bool {
+        self.axes.contains(AxisTypes::RotationZ)
+    }
+    fn has_slider(&self) -> bool {
+        self.axes.contains(AxisTypes::Slider)
+    }
+    fn tool_type(&self) -> ToolType {
+        self.tool_type
+    }
+}
+
+impl Stylus {
+    /// Returns true if one of the buttons on the stylus triggers
+    /// eraser behaviour. See the
+    /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
+    /// for details.
+    pub fn has_eraser_button(&self) -> bool {
+        !self.eraser_type.is_none_or(|t| t != EraserType::Button)
     }
     /// The number of buttons on this Stylus
     ///
-    /// Note that many styli have an [eraser button](EraserType::Button)
+    /// Note that many styli have an [eraser button](Stylus::has_eraser_button)
     /// that the firmware enforces eraser-like behavior for,
     /// see the
     /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
@@ -1321,32 +1482,6 @@ impl Stylus {
     /// This button is excluded from the number of buttons.
     pub fn num_buttons(&self) -> usize {
         self.num_buttons
-    }
-    pub fn has_tilt(&self) -> bool {
-        self.axes.contains(AxisTypes::Tilt)
-    }
-    pub fn has_pressure(&self) -> bool {
-        self.axes.contains(AxisTypes::Pressure)
-    }
-    pub fn has_distance(&self) -> bool {
-        self.axes.contains(AxisTypes::Distance)
-    }
-    pub fn has_rotation(&self) -> bool {
-        self.axes.contains(AxisTypes::RotationZ)
-    }
-    pub fn has_slider(&self) -> bool {
-        self.axes.contains(AxisTypes::Slider)
-    }
-
-    /// Styli with an [eraser_type()][Self::eraser_type] of
-    /// [EraserType::Invert] may present the eraser as different
-    /// tool with a different [StylusId]. The paired ID signals
-    /// that this ID is on the same physical device.
-    ///
-    /// Likewise, the paired ID for such an eraser is the
-    /// corresponding stylus.
-    pub fn paired_id(&self) -> Option<StylusId> {
-        self.paired_id
     }
 }
 
