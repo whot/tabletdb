@@ -1,20 +1,57 @@
 // SPDX-License-Identifier: MIT
-//! A database of information about graphics tablets
+//! A database of information about graphics tablets.
 //!
-//! It provides **static** information about tablets that cannot be obtained from
-//! the kernel device itself and can help with:
-//! - checking which axes are actually available on a given tool (the kernel exports all *possible*
+//! This crate provides **static** information about graphics tablets (Wacom, Huion, XP-Pen, Ugee,
+//! etc.) that cannot be obtained from the kernel device itself and can help with:
+//! - querying which axes are actually available on a given tool (the kernel exports all *possible*
 //!   axes across all supported tools on a tablet)
-//! - checking whether a tablet needs to be mapped to a screen, and helping decide which screen
-//! - provides a detailed (SVG) and rough (top/bottom/left/right) layout of the button positions
+//! - querying whether a tablet needs to be mapped to a screen, and helping decide which screen
+//! - obtaining a detailed (SVG) and rough (top/bottom/left/right) layout of the button positions
+//!
+//! A tablet is not required for querying information about tablet. This crate is tablet-vendor-agnostic.
 //!
 //! This crate does not affect the functionality of a tablet. It's a wrapper around a set of text
 //! files that describe a tablet and never actually looks at the device itself beyond (maybe)
 //! extracting the device's name and ids from `/sys`.
 //!
+//! ## Tablets, Styli, Buttons, Rings, Dials, Strips
+//!
+//! A tablet as seen by this crate refers to the physical tablet that is connected to the host.
+//!
+//! Many tablets have [Buttons](Button) and almost all tablets support [Styli](Stylus), the notable
+//! exception being those resembling a [Remote](IntegrationFlags::Remote), e.g. the Wacom
+//! ExpressKey Remote.
+//!
+//! A tablet may also have additional [Features](Feature):
+//! - a [Ring] is a ring-shaped feature providing absolute finger position, see e.g. the Wacom
+//!   Intuos Pro series
+//! - a [Dial] is a dial or wheel-shaped feature providing relative input data, see
+//!   e.g. the Huion Inspiroy 2S or the Huion Inspiroy Dial 2
+//! - a touch [Strip] strip providing absolute finger position, see e.g. the Wacom Intuos 3.
+//!
+//! A tablet may have more than one feature (e.g. two rings) and more than one feature type (e.g. a
+//! ring and two strips).
+//!
+//! Features may be logically associated with a [Button]. For example the Wacom Intuos Pro
+//! series has one button inside the [Ring]. This button is physically independent
+//! of the ring but often associated with the "modes" of the ring (and other buttons).
+//! This button is referred to as "mode toggle button".
+//!
+//! Such a mode may allow assigning different actions to the feature depending on the current mode.
+//! This crate only provides information about which button is logically associated
+//! with the feature (see [Feature::buttons()]) and the number of modes expected on this tablet
+//! ([Feature::num_modes()]).
+//!
+//! On Linux, the modes are typically tied to the LEDs on the device and pressing the
+//! button associated with the feature will iterate and/or toggle the respective LED.
+//!
+//! Some tablets have more than one mode toggle button - on those tablets each button
+//! is expected to switch to one specific mode. On tablets with one mode switch button
+//! the button is typically expected to cycle modes.
+//!
 //! ## Examples
 //!
-//! The entry point is via a [Cache]:
+//! The most common use is to query information about a tablet that exists locally:
 //! ```
 //! # use tabletdb::{Error, TabletInfo, Cache};
 //! # use std::path::PathBuf;
@@ -22,24 +59,41 @@
 //! // A cache with default include paths
 //! let cache = Cache::new()?;
 //! for entry in std::fs::read_dir("/dev/input").unwrap().flatten() {
+//!     // Extract the information from a local tablet
 //!     let info = TabletInfo::new_from_path(&entry.path())?;
-//!     cache.tablets().filter(|t| *t == &info).for_each(|tablet| {
+//!     // Find that tablet in the cache
+//!     for tablet in cache.iter().filter(|t| *t == &info) {
 //!         println!("{:?}: {}", entry.path(), tablet.name());
-//!     });
+//!     }
 //! }
 //! # Ok(())
 //! # }
 //! ```
+//! But it's also possible to simply filter on other information if no device is present:
+//! ```
+//! # use tabletdb::{Error, BusType, TabletInfo, Cache};
+//! # use std::path::PathBuf;
+//! # fn load()  -> Result<(), Error> {
+//! // A cache with default include paths
+//! let cache = Cache::new()?;
+//! for tablet in cache.iter().filter(|t| t.bustype() == BusType::Bluetooth) {
+//!         println!("{} is a supported Bluetooth tablet", tablet.name());
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! See the [CacheBuilder] for cases where non-default include paths are needed.
 //!
-//! ## libwacom
-//! This crate is equivalent to [libwacom](https://github.com/linuxwacom/libwacom).
-//! Some of libwacom's deprecated APIs in libwacom are not present here, others
+//! ## Relationship to libwacom
+//! This crate aims to be equivalent to [libwacom](https://github.com/linuxwacom/libwacom).
+//! Some of libwacom's deprecated APIs are not present here, others
 //! provide a different structure but the set of information is the same.
 //!
 //! <div class="warning">
 //! This crate currently uses the libwacom data files as data source.  Note that these data files
-//! are *not* stable API and updating libwacom may cause this crate to stop working.
+//! are <em>not</em> stable API and updating libwacom may cause this crate to stop working. We aim
+//! to remove this dependency in future versions.
 //! </div>
 
 use bitflags::bitflags;
@@ -106,8 +160,10 @@ impl CacheBuilder {
         CacheBuilder { paths: Vec::new() }
     }
 
-    /// Add the default set of include paths as compiled in, typically
-    /// `/usr/share/libwacom`, `/etc/libwacom` and `$XDG_CONFIG_HOME/libwacom`.
+    /// Add the default set of include paths as compiled in, typically:
+    /// - `/usr/share/libwacom`,
+    /// - `/etc/libwacom`
+    /// - `$XDG_CONFIG_HOME/libwacom`.
     pub fn add_default_includes(mut self) -> Self {
         // FIXME: this should come from libwacom-data.pc or something
         // except libwacom explicitly has those tablet files as "not API"
@@ -121,6 +177,9 @@ impl CacheBuilder {
     /// Add an include path at the current position. Include paths are
     /// processed in-order with a file in most recent path obscuring
     /// a file with the same name in an earlier include path.
+    ///
+    /// Include paths to not need to exist, empty or non-existing include
+    /// paths are ignored.
     pub fn add_include(mut self, path: &Path) -> Self {
         self.paths.push(path.into());
         self
@@ -416,7 +475,13 @@ impl From<u16> for ProductId {
     }
 }
 
-/// A 32-bit Stylus ID
+/// A 32-bit Stylus ID.
+///
+/// This ID can identify the type of a stylus but
+/// is only supported by some tablets.
+///
+/// Typically styli that support a [ToolId] are also
+/// uniquely identifiable at runtime via a unique serial number.
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct ToolId(pub u32);
 
@@ -454,7 +519,7 @@ impl From<&ToolId> for u32 {
     }
 }
 
-/// A USB device ID comprising a vendor and tool id
+/// A USB device ID comprising a bus type, vendor id and product id
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct DeviceId {
     bustype: BusType,
@@ -509,7 +574,9 @@ pub trait Units {
     }
 }
 
-/// A physical length
+/// A physical length, e.g. the Tablet's [width](Tablet::width) or [height](Tablet::height).
+///
+/// See the [Units] trait to access the length.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Length {
     inches: usize,
@@ -521,6 +588,7 @@ impl Units for Length {
     }
 }
 
+/// Specifies how the tablet is integrated.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub enum IntegrationFlags {
     /// The tablet is integrated into a display, e.g.
@@ -578,7 +646,7 @@ impl Cache {
         CacheBuilder::new().add_default_includes().build()
     }
 
-    /// Returns an iterator over all known tablets
+    /// Returns an iterator over all known tablets.
     ///
     /// Identical to [tablets()](Self::tablets).
     pub fn iter(&self) -> impl Iterator<Item = &Tablet> {
@@ -765,7 +833,7 @@ impl From<&EvdevCode> for u16 {
     }
 }
 
-/// A button index on a tablet
+/// A zero-based button index on a tablet
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ButtonIndex(usize);
 
@@ -787,14 +855,19 @@ pub struct Button {
 }
 
 impl Button {
+    /// The zero-based index of this button
     pub fn index(&self) -> ButtonIndex {
         self.index
     }
 
+    /// An approximate location of this button. This location may be used to
+    /// group buttons together in a UI or group buttons together
+    /// with one button is the mode switch button.
     pub fn location(&self) -> Location {
         self.location
     }
 
+    /// The code for this button
     pub fn evdev_code(&self) -> EvdevCode {
         self.evdev_code
     }
@@ -1146,16 +1219,24 @@ impl PartialEq<TabletInfo> for Tablet {
     }
 }
 
+/// An approximate description of the stylus type
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum StylusType {
     Unknown,
+    /// A standard pen-like stylus
     General,
     Inking,
+    /// A tool that is used like an airbrush (i.e. it may
+    /// never touch the surface). Airbrush tools may have a
+    /// slider.
     Airbrush,
     Classic,
     Marker,
     Stroke,
+    /// A mouse-like device
     Puck,
+    /// A pen that supports rotation axes in addition
+    /// to the typical x/y and tilt
     Pen3D,
     Mobile,
 }
@@ -1184,6 +1265,10 @@ bitflags! {
     }
 }
 
+/// A stylus describes one tool available on a tablet.
+///
+/// Not all [Stylus] tools are phsyically styli-like, e.g. the Wacom Lens Cursor
+/// is a mouse-like device.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylus {
     idx: usize,
@@ -1197,6 +1282,10 @@ pub struct Stylus {
 }
 
 impl Stylus {
+    /// The name of this stylus given by the manufacturer,
+    /// e.g. "Grip Pen". This name is suitable for presentation.
+    ///
+    /// This name may not be unique.
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -1212,6 +1301,14 @@ impl Stylus {
     pub fn eraser_type(&self) -> EraserType {
         self.eraser_type
     }
+    /// The number of buttons on this Stylus
+    ///
+    /// Note that many styli have an [eraser button](EraserType::Button)
+    /// that the firmware enforces eraser-like behavior for,
+    /// see the
+    /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
+    /// for details.
+    /// This button is excluded from the number of buttons.
     pub fn num_buttons(&self) -> usize {
         self.num_buttons
     }
@@ -1230,6 +1327,14 @@ impl Stylus {
     pub fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
+
+    /// Styli with an [eraser_type()][Self::eraser_type] of
+    /// [EraserType::Invert] may present the eraser as different
+    /// tool with a different [StylusId]. The paired ID signals
+    /// that this ID is on the same physical device.
+    ///
+    /// Likewise, the paired ID for such an eraser is the
+    /// corresponding stylus.
     pub fn paired_id(&self) -> Option<StylusId> {
         self.paired_id
     }
