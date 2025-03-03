@@ -278,38 +278,49 @@ impl CacheBuilder {
             // Filter any invert erasers, we map those directl
             .filter(|(_, entry)| entry.eraser_type != Some(EraserType::Invert))
             .map(|(idx, s)| {
-                let stylus = Stylus {
-                    idx,
-                    id: s.id,
-                    tool_type: s.tool_type,
-                    eraser_type: s.eraser_type,
-                    axes: s.axes,
-                    name: s.name.clone(),
-                    num_buttons: s.num_buttons,
-                };
-                // This is really bad in the data files. A tool
-                // without a paired ID is always a stylus or an
-                // eraser but only the eraser has the EraserType
-                // set.
-                if s.eraser_type.is_none_or(|t| t == EraserType::Button) {
-                    Tool::Stylus(stylus)
+                if s.tool_type == ToolType::Puck {
+                    Tool::Mouse(Mouse {
+                        idx,
+                        id: s.id,
+                        tool_type: s.tool_type,
+                        axes: s.axes,
+                        name: s.name.clone(),
+                        num_buttons: s.num_buttons,
+                    })
                 } else {
-                    let paired_id = s.paired_ids.unwrap();
-                    let eraser: Eraser = stylus_entries
-                        .iter()
-                        .filter(|e| e.id == paired_id)
-                        .map(|e| Eraser {
-                            idx,
-                            id: e.id,
-                            tool_type: e.tool_type,
-                            eraser_type: e.eraser_type.unwrap(),
-                            axes: e.axes,
-                            name: e.name.clone(),
-                        })
-                        .take(1)
-                        .next()
-                        .unwrap();
-                    Tool::StylusWithEraser(stylus, eraser)
+                    let stylus = Stylus {
+                        idx,
+                        id: s.id,
+                        tool_type: s.tool_type,
+                        eraser_type: s.eraser_type,
+                        axes: s.axes,
+                        name: s.name.clone(),
+                        num_buttons: s.num_buttons,
+                    };
+                    // This is really bad in the data files. A tool
+                    // without a paired ID is always a stylus or an
+                    // eraser but only the eraser has the EraserType
+                    // set.
+                    if s.eraser_type.is_none_or(|t| t == EraserType::Button) {
+                        Tool::Stylus(stylus)
+                    } else {
+                        let paired_id = s.paired_ids.unwrap();
+                        let eraser: Eraser = stylus_entries
+                            .iter()
+                            .filter(|e| e.id == paired_id)
+                            .map(|e| Eraser {
+                                idx,
+                                id: e.id,
+                                tool_type: e.tool_type,
+                                eraser_type: e.eraser_type.unwrap(),
+                                axes: e.axes,
+                                name: e.name.clone(),
+                            })
+                            .take(1)
+                            .next()
+                            .unwrap();
+                        Tool::StylusWithEraser(stylus, eraser)
+                    }
                 }
             })
             .collect();
@@ -1301,6 +1312,8 @@ bitflags! {
         const Distance = 1 << 2;
         const Slider = 1 << 3;
         const RotationZ = 1 << 4;
+        const Lens = 1 << 5;
+        const Wheel = 1 << 6;
     }
 }
 
@@ -1335,6 +1348,11 @@ pub enum Tool {
     /// and inverting the stylus will present the [Eraser] tool. This tool may
     /// have a different [VendorId] and [ToolId] to the [Stylus].
     StylusWithEraser(Stylus, Eraser),
+    /// A mouse-like device
+    ///
+    /// These tools are of primarily historical interest, they are no longer
+    /// for sale.
+    Mouse(Mouse),
 }
 
 impl Tool {
@@ -1344,6 +1362,7 @@ impl Tool {
         match self {
             Tool::Stylus(s) => s.name(),
             Tool::StylusWithEraser(_, e) => e.name(),
+            Tool::Mouse(m) => m.name(),
         }
     }
     /// A convenience method wrapping [Stylus::vendor_id()] for this tool,
@@ -1352,6 +1371,7 @@ impl Tool {
         match self {
             Tool::Stylus(s) => s.vendor_id(),
             Tool::StylusWithEraser(_, e) => e.vendor_id(),
+            Tool::Mouse(m) => m.vendor_id(),
         }
     }
     /// A convenience method wrapping [Stylus::tool_id()] for this tool,
@@ -1360,7 +1380,75 @@ impl Tool {
         match self {
             Tool::Stylus(s) => s.tool_id(),
             Tool::StylusWithEraser(_, e) => e.tool_id(),
+            Tool::Mouse(m) => m.tool_id(),
         }
+    }
+}
+
+/// A mouse-like device
+///
+/// These tools are of primarily historical interest, they are no longer
+/// for sale.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mouse {
+    idx: usize,
+    name: String,
+    id: StylusId,
+    tool_type: ToolType,
+    axes: AxisTypes,
+    num_buttons: usize,
+}
+
+impl ToolFeatures for Mouse {
+    /// The name of this eraser given by the manufacturer,
+    /// e.g. "Grip Pen". This name is suitable for presentation.
+    ///
+    /// This name may not be unique. Using this name is not
+    /// usually required, the eraser does not live without
+    /// its corresponding stylus and the stylus name is a better
+    /// option for presentation.
+    fn name(&self) -> &str {
+        &self.name
+    }
+    /// The vendor ID of the eraser. Theoretically this may
+    /// be different to the [Stylus::vendor_id()] but no
+    /// such devices have been observed in the wild yet.
+    fn vendor_id(&self) -> VendorId {
+        self.id.vid
+    }
+    /// The tool ID of the eraser.
+    fn tool_id(&self) -> ToolId {
+        self.id.pid
+    }
+    fn has_tilt(&self) -> bool {
+        self.axes.contains(AxisTypes::Tilt)
+    }
+    fn has_pressure(&self) -> bool {
+        self.axes.contains(AxisTypes::Pressure)
+    }
+    fn has_distance(&self) -> bool {
+        self.axes.contains(AxisTypes::Distance)
+    }
+    fn has_rotation(&self) -> bool {
+        self.axes.contains(AxisTypes::RotationZ)
+    }
+    fn has_slider(&self) -> bool {
+        self.axes.contains(AxisTypes::Slider)
+    }
+    fn tool_type(&self) -> ToolType {
+        self.tool_type
+    }
+}
+
+impl Mouse {
+    pub fn has_lens(&self) -> bool {
+        self.axes.contains(AxisTypes::Lens)
+    }
+    pub fn has_wheel(&self) -> bool {
+        self.axes.contains(AxisTypes::Wheel)
+    }
+    pub fn num_buttons(&self) -> usize {
+        self.num_buttons
     }
 }
 
