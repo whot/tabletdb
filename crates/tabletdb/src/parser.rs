@@ -620,7 +620,7 @@ impl StylusFile {
                     "Mobile" => Ok(ToolType::Mobile),
                     _ => Err(parser_error!(path, &section, format!("Invalid Type {s}"))),
                 })??;
-            let axes: AxisTypes = data
+            let mut axes: AxisTypes = data
                 .get(&section, "Axes")
                 .unwrap_or(String::from(""))
                 .split(";")
@@ -639,6 +639,21 @@ impl StylusFile {
                         format!("Axis has invalid value: {n}")
                     )),
                 })?;
+
+            if data
+                .getbool(&section, "HasLens")
+                .map_err(|e| parser_error!(path, "HasLens", &e))?
+                .unwrap_or(false)
+            {
+                axes |= AxisTypes::Lens;
+            }
+            if data
+                .getbool(&section, "HasWheel")
+                .map_err(|e| parser_error!(path, "HasWheel", &e))?
+                .unwrap_or(false)
+            {
+                axes |= AxisTypes::Wheel;
+            }
 
             styli.push(StylusEntry {
                 id: stylus_id,
