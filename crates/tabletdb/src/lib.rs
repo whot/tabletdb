@@ -687,7 +687,7 @@ pub struct TabletInfo {
     bustype: Option<BusType>,
     vid: Option<VendorId>,
     pid: Option<ProductId>,
-    package_name: Option<String>,
+    name: Option<String>,
     kernel_name: Option<String>,
     uniq: Option<String>,
 }
@@ -698,7 +698,7 @@ impl TabletInfo {
             bustype: None,
             pid: None,
             vid: None,
-            package_name: None,
+            name: None,
             kernel_name: None,
             uniq: None,
         }
@@ -779,14 +779,18 @@ impl TabletInfo {
         self.pid = Some(pid);
         self
     }
-    /// The tablet must match this name from its package.
+    /// The tablet must match this name given by the vendor.
     ///
-    /// Many Huion, XP-Pen, etc. devices differ in the package name
+    /// <div class="warning">
+    /// This is almost never the name to use, <em>kernel_name</em> instead.
+    /// </div>
+    ///
+    /// Many Huion, XP-Pen, etc. devices differ in the official name
     /// and the name announced by the firmware to the kernel, e.g.
-    /// XP-Pen devices are typically sold as "XPPen Foo" but the
-    /// firmware labels them as "UGEE Bar".
+    /// XP-Pen devices are typically sold as "XP-Pen Foo" but the
+    /// firmware (and thus the kernel) labels them as "UGEE Bar".
     ///
-    /// The package name is the one specified in the tablet data
+    /// The [name()](Self::name) is the one specified in the tablet data
     /// files. There is rarely a need to specify this name unless you want
     /// to load a specific data file. Use [kernel_name()](Self::kernel_name)
     /// instead.
@@ -796,13 +800,13 @@ impl TabletInfo {
     /// the kernel's name usually has the type appended (e.g. "Pen")
     /// and specifying both the name and match name typically
     /// results in no match.
-    pub fn package_name(mut self, name: String) -> Self {
-        self.package_name = Some(name);
+    pub fn name(mut self, name: String) -> Self {
+        self.name = Some(name);
         self
     }
     /// The tablet must match this kernel name.
     ///
-    /// Do not use this together with [package_name()](Self::package_name),
+    /// Do not use this together with [name()](Self::name),
     /// the kernel's name usually has the type appended (e.g. "Pen")
     /// and specifying both the name and match name typically
     /// results in no match.
@@ -1214,7 +1218,7 @@ impl Tablet {
         (info.bustype.is_none() || self.bustype == info.bustype.unwrap())
             && (info.vid.is_none() || self.vid == info.vid.unwrap())
             && (info.pid.is_none() || self.pid == info.pid.unwrap())
-            && (info.package_name.is_none() || &self.name == info.package_name.as_ref().unwrap())
+            && (info.name.is_none() || &self.name == info.name.as_ref().unwrap())
             && (info.kernel_name.is_none()
                 || self.kernel_name.is_none()
                 || self.kernel_name == info.kernel_name)
