@@ -533,7 +533,7 @@ pub struct StylusEntry {
     pub group: Option<String>,
     pub eraser_type: Option<EraserType>,
     pub axes: AxisTypes,
-    pub stylus_type: StylusType,
+    pub tool_type: ToolType,
     pub paired_ids: Option<StylusId>,
 }
 
@@ -604,20 +604,20 @@ impl StylusFile {
                 None => None,
                 Some(s) => Some(parse_stylus_id(&s)?),
             };
-            let stylus_type: StylusType = data
+            let tool_type: ToolType = data
                 .get(&section, "Type")
                 .ok_or(parser_error!(path, &section, "Missing Type"))
                 .map(|s| match s.as_str() {
-                    "Unknown" => Ok(StylusType::Unknown),
-                    "General" => Ok(StylusType::General),
-                    "Inking" => Ok(StylusType::Inking),
-                    "Airbrush" => Ok(StylusType::Airbrush),
-                    "Classic" => Ok(StylusType::Classic),
-                    "Marker" => Ok(StylusType::Marker),
-                    "Stroke" => Ok(StylusType::Stroke),
-                    "Puck" => Ok(StylusType::Puck),
-                    "3D" => Ok(StylusType::Pen3D),
-                    "Mobile" => Ok(StylusType::Mobile),
+                    "Unknown" => Ok(ToolType::Unknown),
+                    "General" => Ok(ToolType::General),
+                    "Inking" => Ok(ToolType::Inking),
+                    "Airbrush" => Ok(ToolType::Airbrush),
+                    "Classic" => Ok(ToolType::Classic),
+                    "Marker" => Ok(ToolType::Marker),
+                    "Stroke" => Ok(ToolType::Stroke),
+                    "Puck" => Ok(ToolType::Puck),
+                    "3D" => Ok(ToolType::Pen3D),
+                    "Mobile" => Ok(ToolType::Mobile),
                     _ => Err(parser_error!(path, &section, format!("Invalid Type {s}"))),
                 })??;
             let axes: AxisTypes = data
@@ -647,7 +647,7 @@ impl StylusFile {
                 group,
                 eraser_type,
                 axes,
-                stylus_type,
+                tool_type,
                 paired_ids,
             });
         }

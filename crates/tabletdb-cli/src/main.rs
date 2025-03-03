@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tabletdb::{
-    BusType, Button, Dial, Feature, Location, Ring, Strip, Stylus, Tablet, TabletInfo, Units,
+    BusType, Button, Dial, Feature, Location, Ring, Strip, Tablet, TabletInfo, Tool, Units,
 };
 
 #[derive(Parser, Debug)]
@@ -75,15 +75,15 @@ fn cmd_list_styli() -> Result<()> {
     let cache = tabletdb::Cache::new()?;
 
     println!("styli:");
-    let mut styli: Vec<&Stylus> = cache.styli().collect();
-    styli.sort_by_key(|s| format!("{:04x}:{:08x}", s.vendor_id(), s.tool_id()));
+    let mut tools: Vec<&Tool> = cache.tools().collect();
+    tools.sort_by_key(|s| format!("{:04x}:{:08x}", s.vendor_id(), s.tool_id()));
 
-    for stylus in styli.iter() {
+    for tool in tools.iter() {
         println!(
             "- {{ vid: '0x{:04x}', pid: '0x{:08x}', name: '{}' }}",
-            stylus.vendor_id(),
-            stylus.tool_id(),
-            stylus.name()
+            tool.vendor_id(),
+            tool.tool_id(),
+            tool.name()
         );
     }
 
@@ -189,11 +189,11 @@ fn cmd_info(path: Option<String>) -> Result<()> {
 
             if tablet.supports_stylus() {
                 println!("  styli:");
-                for stylus in tablet.styli() {
+                for tool in tablet.tools() {
                     println!(
                         "    - {{ vid: '0x{:04x}', pid: '0x{:08x}' }}",
-                        stylus.vendor_id(),
-                        stylus.tool_id(),
+                        tool.vendor_id(),
+                        tool.tool_id()
                     );
                 }
             }
