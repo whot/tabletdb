@@ -1257,8 +1257,6 @@ pub enum StylusType {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EraserType {
     Unknown,
-    /// No eraser is present on the stylus
-    None,
     /// Eraser is a separate tool on the opposite end of the stylus
     Invert,
     /// Eraser is a button alongside any other stylus buttons
@@ -1287,7 +1285,7 @@ pub struct Stylus {
     name: String,
     id: StylusId,
     stylus_type: StylusType,
-    eraser_type: EraserType,
+    eraser_type: Option<EraserType>,
     num_buttons: usize,
     axes: AxisTypes,
     paired_id: Option<StylusId>,
@@ -1310,7 +1308,7 @@ impl Stylus {
     pub fn stylus_type(&self) -> StylusType {
         self.stylus_type
     }
-    pub fn eraser_type(&self) -> EraserType {
+    pub fn eraser_type(&self) -> Option<EraserType> {
         self.eraser_type
     }
     /// The number of buttons on this Stylus

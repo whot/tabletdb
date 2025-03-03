@@ -531,7 +531,7 @@ pub struct StylusEntry {
     pub name: String,
     pub num_buttons: usize,
     pub group: Option<String>,
-    pub eraser_type: EraserType,
+    pub eraser_type: Option<EraserType>,
     pub axes: AxisTypes,
     pub stylus_type: StylusType,
     pub paired_ids: Option<StylusId>,
@@ -588,12 +588,12 @@ impl StylusFile {
                 .map_or(Ok(0), |s| str::parse(&s))
                 .map_err(|_| parser_error!(path, &section, format!("Invalid Buttons count")))?;
             let group = data.get(&section, "Group");
-            let eraser_type: EraserType =
+            let eraser_type: Option<EraserType> =
                 data.get(&section, "EraserType")
-                    .map_or(Ok(EraserType::None), |s| match s.as_str() {
-                        "Button" => Ok(EraserType::Button),
-                        "Invert" => Ok(EraserType::Invert),
-                        "None" => Ok(EraserType::None),
+                    .map_or(Ok(None), |s| match s.as_str() {
+                        "Button" => Ok(Some(EraserType::Button)),
+                        "Invert" => Ok(Some(EraserType::Invert)),
+                        "None" => Ok(None),
                         _ => Err(parser_error!(
                             path,
                             &section,
