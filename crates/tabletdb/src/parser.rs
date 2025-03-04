@@ -160,6 +160,27 @@ fn lookup_evdev_code(s: &str) -> Result<EvdevCode> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ToolType {
+    Unknown,
+    /// A standard pen-like stylus
+    General,
+    Inking,
+    /// A tool that is used like an airbrush (i.e. it may
+    /// never touch the surface). Airbrush tools may have a
+    /// slider.
+    Airbrush,
+    Classic,
+    Marker,
+    Stroke,
+    /// A mouse-like device
+    Puck,
+    /// A pen that supports rotation axes in addition
+    /// to the typical x/y and tilt
+    Pen3D,
+    Mobile,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct DeviceMatch {
     pub bustype: BusType,
