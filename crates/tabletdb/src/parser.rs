@@ -160,6 +160,27 @@ fn lookup_evdev_code(s: &str) -> Result<EvdevCode> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ToolType {
+    Unknown,
+    /// A standard pen-like stylus
+    General,
+    Inking,
+    /// A tool that is used like an airbrush (i.e. it may
+    /// never touch the surface). Airbrush tools may have a
+    /// slider.
+    Airbrush,
+    Classic,
+    Marker,
+    Stroke,
+    /// A mouse-like device
+    Puck,
+    /// A pen that supports rotation axes in addition
+    /// to the typical x/y and tilt
+    Pen3D,
+    Mobile,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct DeviceMatch {
     pub bustype: BusType,
@@ -533,7 +554,7 @@ pub struct StylusEntry {
     pub group: Option<String>,
     pub eraser_type: Option<EraserType>,
     pub axes: AxisTypes,
-    pub stylus_type: StylusType,
+    pub tool_type: ToolType,
     pub paired_ids: Option<StylusId>,
 }
 
@@ -604,23 +625,23 @@ impl StylusFile {
                 None => None,
                 Some(s) => Some(parse_stylus_id(&s)?),
             };
-            let stylus_type: StylusType = data
+            let tool_type: ToolType = data
                 .get(&section, "Type")
                 .ok_or(parser_error!(path, &section, "Missing Type"))
                 .map(|s| match s.as_str() {
-                    "Unknown" => Ok(StylusType::Unknown),
-                    "General" => Ok(StylusType::General),
-                    "Inking" => Ok(StylusType::Inking),
-                    "Airbrush" => Ok(StylusType::Airbrush),
-                    "Classic" => Ok(StylusType::Classic),
-                    "Marker" => Ok(StylusType::Marker),
-                    "Stroke" => Ok(StylusType::Stroke),
-                    "Puck" => Ok(StylusType::Puck),
-                    "3D" => Ok(StylusType::Pen3D),
-                    "Mobile" => Ok(StylusType::Mobile),
+                    "Unknown" => Ok(ToolType::Unknown),
+                    "General" => Ok(ToolType::General),
+                    "Inking" => Ok(ToolType::Inking),
+                    "Airbrush" => Ok(ToolType::Airbrush),
+                    "Classic" => Ok(ToolType::Classic),
+                    "Marker" => Ok(ToolType::Marker),
+                    "Stroke" => Ok(ToolType::Stroke),
+                    "Puck" => Ok(ToolType::Puck),
+                    "3D" => Ok(ToolType::Pen3D),
+                    "Mobile" => Ok(ToolType::Mobile),
                     _ => Err(parser_error!(path, &section, format!("Invalid Type {s}"))),
                 })??;
-            let axes: AxisTypes = data
+            let mut axes: AxisTypes = data
                 .get(&section, "Axes")
                 .unwrap_or(String::from(""))
                 .split(";")
@@ -640,6 +661,21 @@ impl StylusFile {
                     )),
                 })?;
 
+            if data
+                .getbool(&section, "HasLens")
+                .map_err(|e| parser_error!(path, "HasLens", &e))?
+                .unwrap_or(false)
+            {
+                axes |= AxisTypes::Lens;
+            }
+            if data
+                .getbool(&section, "HasWheel")
+                .map_err(|e| parser_error!(path, "HasWheel", &e))?
+                .unwrap_or(false)
+            {
+                axes |= AxisTypes::Wheel;
+            }
+
             styli.push(StylusEntry {
                 id: stylus_id,
                 name,
@@ -647,7 +683,7 @@ impl StylusFile {
                 group,
                 eraser_type,
                 axes,
-                stylus_type,
+                tool_type,
                 paired_ids,
             });
         }
