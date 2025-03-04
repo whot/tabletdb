@@ -94,11 +94,7 @@ fn cmd_info(path: Option<String>) -> Result<()> {
     if let Some(path) = path {
         let cache = tabletdb::Cache::new()?;
         let info = TabletInfo::new_from_path(&PathBuf::from(&path))?;
-        let mut tablets = cache
-            .tablets()
-            .into_iter()
-            .filter(|t| *t == &info)
-            .peekable();
+        let mut tablets = cache.tablets().filter(|t| *t == &info).peekable();
         if tablets.next().is_none() {
             println!("{:?} is not a known tablet device", path);
             return Ok(());
