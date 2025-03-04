@@ -278,20 +278,34 @@ impl CacheBuilder {
             // Filter any invert erasers, we map those directl
             .filter(|(_, entry)| entry.eraser_type != Some(EraserType::Invert))
             .map(|(idx, s)| {
-                if s.tool_type == ToolType::Puck {
-                    Tool::Mouse(Mouse {
+                if s.tool_type == parser::ToolType::Puck {
+                    Ok(Tool::Mouse(Mouse {
                         idx,
                         id: s.id,
-                        tool_type: s.tool_type,
                         axes: s.axes,
                         name: s.name.clone(),
                         num_buttons: s.num_buttons,
-                    })
+                    }))
                 } else {
+                    let st = match s.tool_type {
+                        parser::ToolType::General => StylusType::General,
+                        parser::ToolType::Inking => StylusType::Inking,
+                        parser::ToolType::Airbrush => StylusType::Airbrush,
+                        parser::ToolType::Classic => StylusType::Classic,
+                        parser::ToolType::Marker => StylusType::Marker,
+                        parser::ToolType::Stroke => StylusType::Stroke,
+                        parser::ToolType::Pen3D => StylusType::Pen3D,
+                        parser::ToolType::Mobile => StylusType::Mobile,
+                        _ => {
+                            return Err(Error::ParserError {
+                                message: format!("Unsupported tool type {:?}", s.tool_type),
+                            })
+                        }
+                    };
                     let stylus = Stylus {
                         idx,
                         id: s.id,
-                        tool_type: s.tool_type,
+                        stylus_type: st,
                         eraser_type: s.eraser_type,
                         axes: s.axes,
                         name: s.name.clone(),
@@ -302,7 +316,7 @@ impl CacheBuilder {
                     // eraser but only the eraser has the EraserType
                     // set.
                     if s.eraser_type.is_none_or(|t| t == EraserType::Button) {
-                        Tool::Stylus(stylus)
+                        Ok(Tool::Stylus(stylus))
                     } else {
                         let paired_id = s.paired_ids.unwrap();
                         let eraser: Eraser = stylus_entries
@@ -311,7 +325,6 @@ impl CacheBuilder {
                             .map(|e| Eraser {
                                 idx,
                                 id: e.id,
-                                tool_type: e.tool_type,
                                 eraser_type: e.eraser_type.unwrap(),
                                 axes: e.axes,
                                 name: e.name.clone(),
@@ -319,11 +332,11 @@ impl CacheBuilder {
                             .take(1)
                             .next()
                             .unwrap();
-                        Tool::StylusWithEraser(stylus, eraser)
+                        Ok(Tool::StylusWithEraser(stylus, eraser))
                     }
                 }
             })
-            .collect();
+            .collect::<Result<Vec<Tool>>>()?;
 
         let tablets = tablet_entries
             .into_iter()
@@ -1273,9 +1286,11 @@ impl PartialEq<TabletInfo> for Tablet {
 }
 
 /// An approximate description of the stylus type
+///
+/// This type may be used to e.g. present differnent icons
+/// of a stylus depending on a type.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ToolType {
-    Unknown,
+pub enum StylusType {
     /// A standard pen-like stylus
     General,
     Inking,
@@ -1286,8 +1301,6 @@ pub enum ToolType {
     Classic,
     Marker,
     Stroke,
-    /// A mouse-like device
-    Puck,
     /// A pen that supports rotation axes in addition
     /// to the typical x/y and tilt
     Pen3D,
@@ -1325,7 +1338,6 @@ pub trait ToolFeatures {
     fn name(&self) -> &str;
     fn vendor_id(&self) -> VendorId;
     fn tool_id(&self) -> ToolId;
-    fn tool_type(&self) -> ToolType;
 
     fn has_tilt(&self) -> bool;
     fn has_pressure(&self) -> bool;
@@ -1334,6 +1346,10 @@ pub trait ToolFeatures {
     fn has_slider(&self) -> bool;
 }
 
+/// A physical tool that may be used on a device.
+///
+/// This is a rough grouping only, more information about each tool may be available
+/// in the contained struct.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tool {
     /// A stylus-like tool without an eraser at the other entry.
@@ -1394,7 +1410,6 @@ pub struct Mouse {
     idx: usize,
     name: String,
     id: StylusId,
-    tool_type: ToolType,
     axes: AxisTypes,
     num_buttons: usize,
 }
@@ -1435,9 +1450,6 @@ impl ToolFeatures for Mouse {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
-    fn tool_type(&self) -> ToolType {
-        self.tool_type
-    }
 }
 
 impl Mouse {
@@ -1457,7 +1469,6 @@ pub struct Eraser {
     idx: usize,
     name: String,
     id: StylusId,
-    tool_type: ToolType,
     eraser_type: EraserType,
     axes: AxisTypes,
 }
@@ -1498,9 +1509,6 @@ impl ToolFeatures for Eraser {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
-    fn tool_type(&self) -> ToolType {
-        self.tool_type
-    }
 }
 
 /// A stylus describes one tool available on a tablet.
@@ -1512,7 +1520,7 @@ pub struct Stylus {
     idx: usize,
     name: String,
     id: StylusId,
-    tool_type: ToolType,
+    stylus_type: StylusType,
     eraser_type: Option<EraserType>,
     num_buttons: usize,
     axes: AxisTypes,
@@ -1547,9 +1555,6 @@ impl ToolFeatures for Stylus {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
-    fn tool_type(&self) -> ToolType {
-        self.tool_type
-    }
 }
 
 impl Stylus {
@@ -1570,6 +1575,10 @@ impl Stylus {
     /// This button is excluded from the number of buttons.
     pub fn num_buttons(&self) -> usize {
         self.num_buttons
+    }
+
+    pub fn stylus_type(&self) -> StylusType {
+        self.stylus_type
     }
 }
 
