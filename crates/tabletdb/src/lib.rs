@@ -412,7 +412,7 @@ impl std::fmt::LowerHex for VendorId {
 impl std::fmt::UpperHex for VendorId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let val = self.0;
-        std::fmt::LowerHex::fmt(&val, f)
+        std::fmt::UpperHex::fmt(&val, f)
     }
 }
 
@@ -455,7 +455,7 @@ impl std::fmt::LowerHex for ProductId {
 impl std::fmt::UpperHex for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let val = self.0;
-        std::fmt::LowerHex::fmt(&val, f)
+        std::fmt::UpperHex::fmt(&val, f)
     }
 }
 
@@ -505,7 +505,7 @@ impl std::fmt::LowerHex for ToolId {
 impl std::fmt::UpperHex for ToolId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let val = self.0;
-        std::fmt::LowerHex::fmt(&val, f)
+        std::fmt::UpperHex::fmt(&val, f)
     }
 }
 
@@ -1347,5 +1347,23 @@ impl Stylus {
     /// corresponding stylus.
     pub fn paired_id(&self) -> Option<StylusId> {
         self.paired_id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hex_format() {
+        let vid = VendorId(0x12ab);
+        assert_eq!(format!("{vid:x}"), "12ab");
+        assert_eq!(format!("{vid:X}"), "12AB");
+        let pid = ProductId(0xbc12);
+        assert_eq!(format!("{pid:x}"), "bc12");
+        assert_eq!(format!("{pid:X}"), "BC12");
+        let tid = ToolId(0xd12e);
+        assert_eq!(format!("{tid:x}"), "d12e");
+        assert_eq!(format!("{tid:X}"), "D12E");
     }
 }
