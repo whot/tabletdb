@@ -204,15 +204,6 @@ impl TryFrom<&str> for DeviceMatch {
     type Error = ParserError;
 
     fn try_from(s: &str) -> Result<DeviceMatch> {
-        if s == "generic" {
-            return Ok(DeviceMatch {
-                bustype: BusType::Unknown { bustype: 0 },
-                vid: VendorId::from(0x00),
-                pid: ProductId::from(0x00),
-                name: Some(String::from("Generic")),
-                fw: None,
-            });
-        }
         let components: Vec<&str> = s.split("|").collect();
         if components.len() < 3 {
             return Err(parser_error!("DeviceMatch", s));
@@ -366,7 +357,7 @@ impl TabletFile {
 
         let device_matches: Vec<DeviceMatch> = device_match
             .split(";")
-            .filter(|s| !s.is_empty())
+            .filter(|s| !s.is_empty() && *s != "generic")
             .map(DeviceMatch::try_from)
             .collect::<Result<Vec<DeviceMatch>>>()?;
 
