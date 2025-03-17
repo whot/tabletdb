@@ -255,7 +255,7 @@ pub struct TabletEntry {
     pub paired_id: Option<DeviceMatch>,
     pub width: usize,
     pub height: usize,
-    pub layout: Option<String>,
+    pub layout: Option<PathBuf>,
     pub integrated_in: Vec<IntegrationFlags>,
 
     pub stylus: bool,
@@ -315,7 +315,12 @@ impl TabletFile {
                 .map_err(|e: std::num::ParseIntError| parser_error!("Height", format!("{e}")))
         })?;
 
-        let layout: Option<String> = data.get("Device", "Layout");
+        let layout: Option<PathBuf> = data.get("Device", "Layout").map(PathBuf::from);
+        let layout: Option<PathBuf> = layout.map(|l| {
+            vec![path.parent().unwrap(), &PathBuf::from("layouts"), &l]
+                .into_iter()
+                .collect()
+        });
         let integrated_in: Vec<IntegrationFlags> = data
             .get("Device", "IntegratedIn")
             .unwrap_or(String::from(""))

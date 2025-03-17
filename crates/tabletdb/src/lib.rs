@@ -353,7 +353,7 @@ impl CacheBuilder {
                 model_name: t.model_name,
                 kernel_name: t.device_match.name,
                 fw_version: t.device_match.fw,
-                layout: t.layout.map(PathBuf::from),
+                layout: t.layout,
 
                 width: Length { inches: t.width },
                 height: Length { inches: t.height },
