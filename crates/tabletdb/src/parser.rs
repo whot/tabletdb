@@ -238,6 +238,13 @@ impl TryFrom<&str> for DeviceMatch {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
+pub enum IntegrationFlags {
+    Display,
+    System,
+    Remote,
+}
+
 #[derive(Debug)]
 pub struct TabletEntry {
     pub name: String,

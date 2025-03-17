@@ -23,7 +23,7 @@
 //! one of the supported [BusTypes](BusType).
 //!
 //! Many tablets have [Buttons](Button) and almost all tablets support [Styli](Stylus), the notable
-//! exception being those resembling a [Remote](IntegrationFlags::Remote), e.g. the Wacom
+//! exception being those resembling a [Remote](FormFactor::Remote), e.g. the Wacom
 //! ExpressKey Remote.
 //!
 //! A tablet may also have additional [Features](Feature):
@@ -358,7 +358,7 @@ impl CacheBuilder {
                 width: Length { inches: t.width },
                 height: Length { inches: t.height },
 
-                integration_flags: t.integrated_in,
+                form_factor: FormFactor::from_flags(&t.integrated_in),
 
                 paired_id: t.paired_id.map(|m| m.to_device_id()),
 
@@ -635,20 +635,30 @@ impl Units for Length {
 
 /// Specifies how the tablet is integrated.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
-pub enum IntegrationFlags {
+pub enum FormFactor {
     /// The tablet is integrated into a display, e.g.
     /// a Wacom Cintiq.
-    Display,
-    /// The tablet is integrated into a system, e.g.
+    ExternalDisplay,
+    /// The tablet is integrated into the display of a system, e.g.
     /// a built-in tablet in a laptop.
-    ///
-    /// This flag does not usually exist on its own
-    /// and is set together with [Display](IntegrationFlags::Display).
-    System,
-
+    InternalDisplay,
     /// The tablet is an external remote like the
     /// Wacom ExpressKey Remote.
     Remote,
+}
+
+impl FormFactor {
+    fn from_flags(flags: &[parser::IntegrationFlags]) -> Option<FormFactor> {
+        let ff = flags.iter().fold(None, |acc, f| match (acc, f) {
+            (_, parser::IntegrationFlags::Remote) => Some(FormFactor::Remote),
+            (_, parser::IntegrationFlags::System) => Some(FormFactor::InternalDisplay),
+            (Some(FormFactor::InternalDisplay), parser::IntegrationFlags::Display) => {
+                Some(FormFactor::InternalDisplay)
+            }
+            (_, parser::IntegrationFlags::Display) => Some(FormFactor::ExternalDisplay),
+        });
+        ff
+    }
 }
 
 /// A cache of all tablets known to this crate at the
@@ -1120,7 +1130,7 @@ pub struct Tablet {
     has_touch: bool,
     has_touchswitch: bool,
 
-    integration_flags: Vec<IntegrationFlags>,
+    form_factor: Option<FormFactor>,
 
     buttons: Vec<Button>,
     rings: Vec<Ring>,
@@ -1233,8 +1243,14 @@ impl Tablet {
     pub fn is_reversible(&self) -> bool {
         self.is_reversible
     }
-    pub fn integration_flags(&self) -> &[IntegrationFlags] {
-        &self.integration_flags
+    /// Returns the special form factor that applies to this tablet, if any.
+    ///
+    /// The default form factor is an extern tablet (e.g. Wacom Intuos series). Tablets
+    /// may be integrated into [a laptop display](FormFactor::InternalDisplay) or
+    /// an [external display](FormFactor::ExternalDisplay) or be a
+    /// [remote-like](FormFactor::Remote) device.
+    pub fn form_factor(&self) -> Option<FormFactor> {
+        self.form_factor
     }
     pub fn supports_stylus(&self) -> bool {
         self.has_stylus
