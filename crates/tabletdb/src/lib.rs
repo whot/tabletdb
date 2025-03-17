@@ -834,7 +834,7 @@ impl TabletInfo {
     /// The tablet must match this name given by the vendor.
     ///
     /// <div class="warning">
-    /// This is almost never the name to use, <em>kernel_name</em> instead.
+    /// This is almost never the name to use, use <em>kernel_name</em> instead.
     /// </div>
     ///
     /// Many Huion, XP-Pen, etc. devices differ in the official name
@@ -1521,10 +1521,7 @@ impl ToolFeatures for Eraser {
     }
 }
 
-/// A stylus describes one tool available on a tablet.
-///
-/// Not all [Stylus] tools are physically styli-like, e.g. the Wacom Lens Cursor
-/// is a mouse-like device.
+/// A stylus describes one stylus-like tool available on a tablet.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stylus {
     idx: usize,
@@ -1568,7 +1565,7 @@ impl ToolFeatures for Stylus {
 }
 
 impl Stylus {
-    /// Returns true if one of the buttons on the stylus triggers
+    /// Returns true if one of the physical buttons on the stylus triggers
     /// eraser behaviour. See the
     /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
     /// for details.
