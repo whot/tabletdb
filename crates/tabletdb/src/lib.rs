@@ -752,7 +752,6 @@ impl TabletInfo {
     /// - `/sys/devices/.../input/input0` sysfs input paths
     pub fn new_from_path(path: &Path) -> Result<TabletInfo> {
         let sysfs = if path.starts_with("/dev/input")
-            && path.is_file()
             && path
                 .file_name()
                 .unwrap()
