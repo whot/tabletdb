@@ -59,12 +59,15 @@ fn cmd_list_tablets() -> Result<()> {
 
     for tablet in tablets {
         println!(
-            "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}', uniq: '{}' }}",
+            "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}'{} }}",
             format!("'{}',", tablet.bustype()),
             *tablet.vendor_id(),
             tablet.product_id(),
             tablet.name(),
-            tablet.firmware_version().unwrap_or("")
+            tablet
+                .firmware_version()
+                .map(|fw| format!(", uniq: '{fw}'"))
+                .unwrap_or("".into())
         );
     }
 
