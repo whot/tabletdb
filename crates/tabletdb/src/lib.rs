@@ -1266,9 +1266,9 @@ impl Tablet {
         self.buttons.iter()
     }
 
-    pub fn find_button(&self, index: &ButtonIndex) -> Option<&Button> {
-        self.buttons.iter().find(|b| b.index == *index)
-    }
+    //pub fn find_button(&self, index: &ButtonIndex) -> Option<&Button> {
+    //    self.buttons.iter().find(|b| b.index == *index)
+    //}
 
     pub fn rings(&self) -> impl Iterator<Item = &Ring> {
         self.rings.iter()
