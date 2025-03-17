@@ -289,18 +289,18 @@ impl TabletFile {
         defaults.delimiters = vec!['='];
         let mut data = configparser::ini::Ini::new_from_defaults(defaults);
         data.load(path).map_err(|e| parser_error!(e))?;
-        let data = data;
+        Self::parse_data(data, path.parent().unwrap()).map_err(|e| e.file(path))
+    }
 
+    fn parse_data(data: configparser::ini::Ini, base_path: &Path) -> Result<TabletFile> {
         // [Device]
-        let name: String =
-            data.get("Device", "Name")
-                .ok_or(parser_error!(path, "Name", "Field is missing"))?;
+        let name: String = data
+            .get("Device", "Name")
+            .ok_or(parser_error!("Name", "Field is missing"))?;
         let model_name: Option<String> = data.get("Device", "ModelName");
-        let device_match: String = data.get("Device", "DeviceMatch").ok_or(parser_error!(
-            path,
-            "DeviceMatch",
-            "Field is missing"
-        ))?;
+        let device_match: String = data
+            .get("Device", "DeviceMatch")
+            .ok_or(parser_error!("DeviceMatch", "Field is missing"))?;
         let paired_id: Option<DeviceMatch> = data
             .get("Device", "PairedID")
             .map(|s| DeviceMatch::try_from(s.as_str()).section_context("DeviceMatch"))
@@ -317,7 +317,7 @@ impl TabletFile {
 
         let layout: Option<PathBuf> = data.get("Device", "Layout").map(PathBuf::from);
         let layout: Option<PathBuf> = layout.map(|l| {
-            vec![path.parent().unwrap(), &PathBuf::from("layouts"), &l]
+            vec![base_path, &PathBuf::from("layouts"), &l]
                 .into_iter()
                 .collect()
         });
@@ -354,19 +354,19 @@ impl TabletFile {
         // [Features]
         let stylus: bool = data
             .getbool("Features", "Stylus")
-            .map_err(|e| parser_error!(path, "Stylus", &e))?
+            .map_err(|e| parser_error!("Stylus", &e))?
             .unwrap_or(false);
         let reversible: bool = data
             .getbool("Features", "Reversible")
-            .map_err(|e| parser_error!(path, "Reversible", &e))?
+            .map_err(|e| parser_error!("Reversible", &e))?
             .unwrap_or(false);
         let touch: bool = data
             .getbool("Features", "Touch")
-            .map_err(|e| parser_error!(path, "Touch", &e))?
+            .map_err(|e| parser_error!("Touch", &e))?
             .unwrap_or(false);
         let touchswitch: bool = data
             .getbool("Features", "TouchSwitch")
-            .map_err(|e| parser_error!(path, "Touchswitch", &e))?
+            .map_err(|e| parser_error!("Touchswitch", &e))?
             .unwrap_or(false);
 
         let device_matches: Vec<DeviceMatch> = device_match
@@ -429,13 +429,11 @@ impl TabletFile {
 
                 for index in indices {
                     let evdev_code = evdev_codes.get(index.0).ok_or(parser_error!(
-                        path,
                         key,
                         format!("Missing evdev code(s) for buttons {}", index.0)
                     ))?;
                     if buttons.iter().any(|b| b.index == index) {
                         return Err(parser_error!(
-                            path,
                             key,
                             format!("Button {:?} listed in two locations", index)
                         ));
