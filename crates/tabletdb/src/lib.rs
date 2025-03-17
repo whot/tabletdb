@@ -2,21 +2,25 @@
 //! A database of information about graphics tablets.
 //!
 //! This crate provides **static** information about graphics tablets (Wacom, Huion, XP-Pen, Ugee,
-//! etc.) that cannot be obtained from the kernel device itself and can help with:
-//! - querying which axes are actually available on a given tool (the kernel exports all *possible*
-//!   axes across all supported tools on a tablet)
-//! - querying whether a tablet needs to be mapped to a screen, and helping decide which screen
+//! etc.) that cannot be obtained from the kernel device itself such as:
+//! - is the given tablet integrated into a display or a system (i.e. a laptop display)
+//! - which axes and buttons are available on a given tool. The kernel exports *all possible*
+//!   axes across *all possible* tools on a tablet.
+//! - which tools are available on a given tablet
 //! - obtaining a detailed (SVG) and rough (top/bottom/left/right) layout of the button positions
 //!
-//! A tablet is not required for querying information about tablet. This crate is tablet-vendor-agnostic.
-//!
+//! A physical tablet is not required for querying information about tablet.
 //! This crate does not affect the functionality of a tablet. It's a wrapper around a set of text
 //! files that describe a tablet and never actually looks at the device itself beyond (maybe)
 //! extracting the device's name and ids from `/sys`.
 //!
+//! This crate is tablet-vendor-agnostic and (in theory) platform-agnostic. Support for platforms
+//! other than Linux is untested.
+//!
 //! ## Tablets, Styli, Buttons, Rings, Dials, Strips
 //!
-//! A tablet as seen by this crate refers to the physical tablet that is connected to the host.
+//! A tablet as seen by this crate refers to the physical tablet that is connected to the host via
+//! one of the supported [BusTypes](BusType).
 //!
 //! Many tablets have [Buttons](Button) and almost all tablets support [Styli](Stylus), the notable
 //! exception being those resembling a [Remote](IntegrationFlags::Remote), e.g. the Wacom
@@ -31,6 +35,8 @@
 //!
 //! A tablet may have more than one feature (e.g. two rings) and more than one feature type (e.g. a
 //! ring and two strips).
+//!
+//! ## Modes and Mode Toggles
 //!
 //! Features may be logically associated with a [Button]. For example the Wacom Intuos Pro
 //! series has one button inside the [Ring]. This button is physically independent
@@ -406,8 +412,13 @@ impl Default for CacheBuilder {
 /// The bustype of this device
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum BusType {
-    /// A bustype currently unsupported by this crate
+    /// A bustype currently unsupported by this crate.
+    ///
+    /// This enum value must never be used for anything but debug printing.
+    /// A future version of this crate will support the unknown bus type
+    /// as separate enum value.
     Unknown {
+        /// One of the `BUS_*` defines in `linux/input.h`.
         bustype: u16,
     },
     USB,
@@ -432,6 +443,8 @@ impl std::fmt::Display for BusType {
     }
 }
 
+/// Conversion into this BusType from one of the
+/// `BUS_*` defines in `linux/input.h`.
 impl From<u16> for BusType {
     fn from(b: u16) -> BusType {
         match b {
@@ -1137,7 +1150,8 @@ impl Tablet {
     /// This is the name given to the device by the
     /// vendor's marketing material and is
     /// suitable for presentation. This name may not
-    /// be the name that the tablet's firmware uses.
+    /// be the name that the tablet's firmware uses and
+    /// thus differ from the [kernel_name()](Self::kernel_name()).
     ///
     /// For example, the "Huion Inspiroy 2S" has a [kernel_name()](Self::kernel_name()) of
     /// "HUION Huion Tablet_H641P"
@@ -1163,7 +1177,18 @@ impl Tablet {
         self.kernel_name.as_deref()
     }
 
-    /// The firmware version string, if any.
+    /// The firmware version string prefix, if any.
+    ///
+    /// This prefix is used to identify the a device further
+    /// where [vendor_id()](Self::vendor_id), [product_id()](Self::product_id)
+    /// and the device's [kernel_name()](Self::kernel_name) are not
+    /// sufficient to identify the tablet. This is the case for
+    /// e.g. many (most?) Huion devices. The firmware string is
+    /// a prefix only, e.g. the real firmware version on Huion devices
+    /// is typically suffixed with a date.
+    ///
+    /// This is **not** the tablet's current firmware version, this
+    /// data is not queried from the device.
     pub fn firmware_version(&self) -> Option<&str> {
         self.fw_version.as_deref()
     }
