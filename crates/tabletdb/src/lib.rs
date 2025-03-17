@@ -412,15 +412,6 @@ impl Default for CacheBuilder {
 /// The bustype of this device
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum BusType {
-    /// A bustype currently unsupported by this crate.
-    ///
-    /// This enum value must never be used for anything but debug printing.
-    /// A future version of this crate will support the unknown bus type
-    /// as separate enum value.
-    Unknown {
-        /// One of the `BUS_*` defines in `linux/input.h`.
-        bustype: u16,
-    },
     USB,
     Bluetooth,
     Serial,
@@ -437,23 +428,8 @@ impl std::fmt::Display for BusType {
                 BusType::Bluetooth => "bluetooth",
                 BusType::Serial => "serial",
                 BusType::I2C => "i2c",
-                BusType::Unknown { bustype: _ } => "unknown",
             }
         )
-    }
-}
-
-/// Conversion into this BusType from one of the
-/// `BUS_*` defines in `linux/input.h`.
-impl From<u16> for BusType {
-    fn from(b: u16) -> BusType {
-        match b {
-            0x3 => BusType::USB,
-            0x5 => BusType::Bluetooth,
-            0x11 => BusType::Serial,
-            0x18 => BusType::I2C,
-            _ => BusType::Unknown { bustype: b },
-        }
     }
 }
 
@@ -813,9 +789,19 @@ impl TabletInfo {
         let mut uniq = String::new();
         std::fs::File::open(sysfs.join("uniq"))?.read_to_string(&mut uniq)?;
 
-        let bustype = u16::from_str_radix(bustype.as_str().trim(), 16).map_err(|_| Error::IO {
-            message: format!("Failed to parse bustype {bustype}"),
-        })?;
+        let bustype: BusType = u16::from_str_radix(bustype.as_str().trim(), 16)
+            .map_err(|_| Error::IO {
+                message: format!("Failed to parse bustype {bustype}"),
+            })
+            .map(|b| match b {
+                0x3 => Ok(BusType::USB),
+                0x5 => Ok(BusType::Bluetooth),
+                0x11 => Ok(BusType::Serial),
+                0x18 => Ok(BusType::I2C),
+                _ => Err(Error::InvalidArgument {
+                    message: format!("Unsupported bus type {b}"),
+                }),
+            })??;
         let vid = u16::from_str_radix(vid.as_str().trim(), 16).map_err(|_| Error::IO {
             message: format!("Failed to parse vendor {vid}"),
         })?;
@@ -824,7 +810,7 @@ impl TabletInfo {
         })?;
 
         Ok(TabletInfo::new()
-            .bustype(bustype.into())
+            .bustype(bustype)
             .vid(vid.into())
             .pid(pid.into())
             .kernel_name(name.trim().into())

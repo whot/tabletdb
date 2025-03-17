@@ -122,7 +122,6 @@ fn cmd_info(path: Option<String>) -> Result<()> {
                     BusType::Bluetooth => "bluetooth",
                     BusType::Serial => "serial",
                     BusType::I2C => "i2c",
-                    BusType::Unknown { .. } => "unknown",
                 }
             );
             println!("  vid: \"0x{:04x}\"", tablet.vendor_id());
