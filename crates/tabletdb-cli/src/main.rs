@@ -240,17 +240,18 @@ fn cmd_list_local() -> Result<()> {
         .trim()
         .to_string();
 
-        let info = TabletInfo::new_from_path(&file.path())?;
-        cache.tablets().filter(|t| *t == &info).for_each(|tablet| {
-            let lookup = tablet_lookup_key(tablet);
-            locals
-                .entry(lookup)
-                .and_modify(|t| t.nodes.push((file.path(), name.clone())))
-                .or_insert(LocalTablet {
-                    tablet: tablet.clone(),
-                    nodes: vec![(file.path(), name.clone())],
-                });
-        })
+        if let Ok(info) = TabletInfo::new_from_path(&file.path()) {
+            cache.tablets().filter(|t| *t == &info).for_each(|tablet| {
+                let lookup = tablet_lookup_key(tablet);
+                locals
+                    .entry(lookup)
+                    .and_modify(|t| t.nodes.push((file.path(), name.clone())))
+                    .or_insert(LocalTablet {
+                        tablet: tablet.clone(),
+                        nodes: vec![(file.path(), name.clone())],
+                    });
+            })
+        }
     }
 
     for local in locals.values() {
