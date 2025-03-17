@@ -317,7 +317,7 @@ impl TabletFile {
 
         let layout: Option<String> = data.get("Device", "Layout");
         let integrated_in: Vec<IntegrationFlags> = data
-            .get("Device", "Layout")
+            .get("Device", "IntegratedIn")
             .unwrap_or(String::from(""))
             .split(";")
             .filter(|s| !s.is_empty())
