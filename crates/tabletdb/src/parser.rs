@@ -694,3 +694,203 @@ impl StylusFile {
         Ok(StylusFile { styli })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use configparser::ini::Ini;
+
+    #[derive(Default)]
+    struct TestTablet {
+        name: String,
+        matches: Vec<String>,
+        width: usize,
+        height: usize,
+        layout: Option<String>,
+        integrated_in: Option<String>,
+    }
+
+    impl TestTablet {
+        fn default() -> TestTablet {
+            TestTablet {
+                name: "Default Test Tablet".into(),
+                matches: vec!["usb|1234|abcd".into()],
+                width: 5,
+                height: 10,
+
+                ..Default::default()
+            }
+        }
+
+        fn as_ini(&self) -> Ini {
+            let mut tablet = Ini::new();
+
+            tablet.set("Device", "Name", Some(String::from(&self.name)));
+            tablet.set("Device", "DeviceMatch", Some(self.matches.join(";")));
+            tablet.set("Device", "Width", Some(format!("{}", self.width)));
+            tablet.set("Device", "Height", Some(format!("{}", self.height)));
+
+            if self.layout.is_some() {
+                tablet.set("Device", "Layout", Some(self.layout.clone().unwrap()));
+            }
+
+            if self.integrated_in.is_some() {
+                tablet.set(
+                    "Device",
+                    "IntegratedIn",
+                    Some(self.integrated_in.clone().unwrap()),
+                );
+            }
+
+            tablet
+        }
+
+        fn as_tablet_file(&self) -> Result<TabletFile> {
+            TabletFile::parse_data(self.as_ini(), &Self::base_path())
+        }
+
+        fn base_path() -> PathBuf {
+            "/usr/local/tabletdb-test".into()
+        }
+    }
+
+    #[test]
+    fn required_fields() {
+        let tf = TestTablet::default().as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+        assert_eq!(entry.name, "Default Test Tablet");
+        assert_eq!(entry.width, 5);
+        assert_eq!(entry.height, 10);
+    }
+
+    #[test]
+    fn device_matches() {
+        let mut tablet = TestTablet::default();
+        tablet.matches = vec![
+            "usb|1234|abcd",
+            "bluetooth|abcd|1234|name",
+            "i2c|9900|aabb|n|fw123",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 3);
+
+        let usb = tf.entries.get(2).unwrap();
+        assert_eq!(
+            usb.device_match,
+            DeviceMatch {
+                bustype: BusType::USB,
+                vid: VendorId(0x1234),
+                pid: ProductId(0xabcd),
+                fw: None,
+                name: None,
+            }
+        );
+
+        let bt = tf.entries.first().unwrap();
+        assert_eq!(
+            bt.device_match,
+            DeviceMatch {
+                bustype: BusType::Bluetooth,
+                vid: VendorId(0xabcd),
+                pid: ProductId(0x1234),
+                fw: None,
+                name: Some("name".into()),
+            }
+        );
+
+        let i2c = tf.entries.get(1).unwrap();
+        assert_eq!(
+            i2c.device_match,
+            DeviceMatch {
+                bustype: BusType::I2C,
+                vid: VendorId(0x9900),
+                pid: ProductId(0xaabb),
+                fw: Some("fw123".into()),
+                name: Some("n".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn device_match_bustype() {
+        let mut tablet = TestTablet::default();
+        for bustype in [
+            BusType::USB,
+            BusType::Serial,
+            BusType::Bluetooth,
+            BusType::I2C,
+        ] {
+            tablet.matches = vec![format!("{}|1234|abcd", bustype)];
+            let tf: TabletFile = tablet.as_tablet_file().unwrap();
+            assert_eq!(tf.entries.len(), 1);
+
+            let entry = tf.entries.first().unwrap();
+            assert_eq!(
+                entry.device_match,
+                DeviceMatch {
+                    bustype,
+                    vid: VendorId(0x1234),
+                    pid: ProductId(0xabcd),
+                    fw: None,
+                    name: None,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn layout_path() {
+        let mut tablet = TestTablet::default();
+        tablet.layout = Some("mylayout.svg".into());
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+
+        assert_eq!(
+            entry.layout.clone().unwrap(),
+            [
+                TestTablet::base_path(),
+                PathBuf::from("layouts"),
+                PathBuf::from("mylayout.svg")
+            ]
+            .iter()
+            .collect::<PathBuf>()
+        );
+    }
+
+    #[test]
+    fn integration_flags() {
+        let mut tablet = TestTablet::default();
+
+        tablet.integrated_in = Some("".into());
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+        assert_eq!(entry.integrated_in, vec![]);
+
+        tablet.integrated_in = Some("Remote".into());
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+        assert_eq!(entry.integrated_in, vec![IntegrationFlags::Remote]);
+
+        tablet.integrated_in = Some("Display".into());
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+        assert_eq!(entry.integrated_in, vec![IntegrationFlags::Display]);
+
+        tablet.integrated_in = Some("Display;System".into());
+        let tf: TabletFile = tablet.as_tablet_file().unwrap();
+        assert_eq!(tf.entries.len(), 1);
+        let entry = tf.entries.first().unwrap();
+        assert_eq!(
+            entry.integrated_in,
+            vec![IntegrationFlags::Display, IntegrationFlags::System]
+        );
+    }
+}
