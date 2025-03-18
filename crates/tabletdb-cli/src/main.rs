@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tabletdb::{
-    BusType, Button, Dial, Feature, Location, ProductId, Ring, Strip, Tablet, TabletInfo, Tool,
-    Units, VendorId,
+    Axis, BusType, Button, Dial, Feature, Location, ProductId, Ring, Strip, Tablet, TabletInfo,
+    Tool, ToolFeatures, Units, VendorId,
 };
 
 #[derive(Clone, Debug)]
@@ -171,12 +171,26 @@ fn cmd_list_styli() -> Result<()> {
     tools.sort_by_key(|s| format!("{:04x}:{:08x}", s.vendor_id(), s.tool_id()));
 
     for tool in tools.iter() {
-        println!(
-            "- {{ vid: '0x{:04x}', pid: '0x{:08x}', name: '{}' }}",
-            tool.vendor_id(),
-            tool.tool_id(),
-            tool.name()
-        );
+        let mut components = Vec::new();
+
+        components.push(format!("vid: '0x{:04x}'", tool.vendor_id()));
+        components.push(format!("pid: '0x{:08x}'", tool.tool_id()));
+        components.push(format!("name: '{}'", tool.name()));
+        let axes = tool
+            .axes()
+            .iter()
+            .map(|a| match a {
+                Axis::Pressure => "p",
+                Axis::Distance => "d",
+                Axis::Tilt => "t",
+                Axis::RotationZ => "r",
+                Axis::Wheel => "w",
+                Axis::Slider => "s",
+            })
+            .collect::<Vec<&str>>();
+        components.push(format!("axes: '{}'", axes.join("")));
+
+        println!("- {{ {} }}", components.join(", "));
     }
 
     Ok(())
