@@ -554,9 +554,10 @@ pub struct StylusEntry {
     pub num_buttons: usize,
     pub group: Option<String>,
     pub eraser_type: Option<EraserType>,
-    pub axes: AxisTypes,
+    pub axes: Vec<Axis>,
     pub tool_type: ToolType,
     pub paired_ids: Option<StylusId>,
+    pub has_lens: bool,
 }
 
 pub struct StylusFile {
@@ -642,40 +643,39 @@ impl StylusFile {
                     "Mobile" => Ok(ToolType::Mobile),
                     _ => Err(parser_error!(path, &section, format!("Invalid Type {s}"))),
                 })??;
-            let mut axes: AxisTypes = data
+            let mut axes: Vec<Axis> = data
                 .get(&section, "Axes")
                 .unwrap_or(String::from(""))
                 .split(";")
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<&str>>()
                 .iter()
-                .try_fold(AxisTypes::None, |acc, a| match a {
-                    &"Pressure" => Ok(acc | AxisTypes::Pressure),
-                    &"Distance" => Ok(acc | AxisTypes::Distance),
-                    &"Tilt" => Ok(acc | AxisTypes::Tilt),
-                    &"Slider" => Ok(acc | AxisTypes::Slider),
-                    &"RotationZ" => Ok(acc | AxisTypes::RotationZ),
+                .map(|a| match a {
+                    &"Pressure" => Ok(Axis::Pressure),
+                    &"Distance" => Ok(Axis::Distance),
+                    &"Tilt" => Ok(Axis::Tilt),
+                    &"Slider" => Ok(Axis::Slider),
+                    &"RotationZ" => Ok(Axis::RotationZ),
                     n => Err(parser_error!(
                         path,
                         &section,
                         format!("Axis has invalid value: {n}")
                     )),
-                })?;
+                })
+                .collect::<Result<Vec<Axis>>>()?;
 
-            if data
-                .getbool(&section, "HasLens")
-                .map_err(|e| parser_error!(path, "HasLens", &e))?
-                .unwrap_or(false)
-            {
-                axes |= AxisTypes::Lens;
-            }
             if data
                 .getbool(&section, "HasWheel")
                 .map_err(|e| parser_error!(path, "HasWheel", &e))?
                 .unwrap_or(false)
             {
-                axes |= AxisTypes::Wheel;
+                axes.push(Axis::Wheel);
             }
+
+            let has_lens: bool = data
+                .getbool(&section, "HasLens")
+                .map_err(|e| parser_error!(path, "HasLens", &e))?
+                .unwrap_or(false);
 
             styli.push(StylusEntry {
                 id: stylus_id,
@@ -684,6 +684,7 @@ impl StylusFile {
                 group,
                 eraser_type,
                 axes,
+                has_lens,
                 tool_type,
                 paired_ids,
             });
