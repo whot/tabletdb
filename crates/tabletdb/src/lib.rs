@@ -1398,32 +1398,53 @@ pub enum Tool {
     Mouse(Mouse),
 }
 
-impl Tool {
+// A convenience implementation that returns the corresponding
+// items from the [Stylus] or [Mouse], ignoring the [Eraser], if any.
+impl ToolFeatures for Tool {
     /// A convenience method wrapping [Stylus::name()] for this tool,
     /// ignoring the eraser (if any)
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         match self {
             Tool::Stylus(s) => s.name(),
-            Tool::StylusWithEraser(_, e) => e.name(),
+            Tool::StylusWithEraser(s, _) => s.name(),
             Tool::Mouse(m) => m.name(),
         }
     }
+
     /// A convenience method wrapping [Stylus::vendor_id()] for this tool,
     /// ignoring the eraser (if any)
-    pub fn vendor_id(&self) -> VendorId {
+    fn vendor_id(&self) -> VendorId {
         match self {
             Tool::Stylus(s) => s.vendor_id(),
-            Tool::StylusWithEraser(_, e) => e.vendor_id(),
+            Tool::StylusWithEraser(s, _) => s.vendor_id(),
             Tool::Mouse(m) => m.vendor_id(),
         }
     }
     /// A convenience method wrapping [Stylus::tool_id()] for this tool,
     /// ignoring the eraser (if any)
-    pub fn tool_id(&self) -> ToolId {
+    fn tool_id(&self) -> ToolId {
         match self {
             Tool::Stylus(s) => s.tool_id(),
-            Tool::StylusWithEraser(_, e) => e.tool_id(),
+            Tool::StylusWithEraser(s, _) => s.tool_id(),
             Tool::Mouse(m) => m.tool_id(),
+        }
+    }
+
+    fn axes(&self) -> &[Axis] {
+        match self {
+            Tool::Stylus(s) => s.axes(),
+            Tool::StylusWithEraser(s, _) => s.axes(),
+            Tool::Mouse(m) => m.axes(),
+        }
+    }
+
+    /// A convenience method wrapping [Stylus::buttons()] for this tool,
+    /// ignoring the eraser (if any)
+    fn buttons(&self) -> &[ToolButton] {
+        match self {
+            Tool::Stylus(s) => s.buttons(),
+            Tool::StylusWithEraser(s, _) => s.buttons(),
+            Tool::Mouse(m) => m.buttons(),
         }
     }
 }
