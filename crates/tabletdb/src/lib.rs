@@ -1500,6 +1500,15 @@ impl Mouse {
     }
 }
 
+/// An eraser is a tool intended for erasing.
+///
+/// This is represented in the *physical* design of the tool.
+/// Typically an eraser is on the back end of a [Stylus] to
+/// emulate a traditional pencil + eraser setup.
+///
+/// Erasers never exist on their own, they are part of
+/// a [Tool::StylusWithEraser] and always coupled with
+/// a corresponding [Stylus].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Eraser {
     idx: usize,
