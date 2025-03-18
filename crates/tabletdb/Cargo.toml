@@ -7,7 +7,6 @@ description = "A database of auxiliary information about graphics tablets"
 keywords = ["tablet", "wacom", "cli", "linux", "wayland"]
 
 [dependencies]
-bitflags = "2.8.0"
 configparser = "3.1.0"
 log = "0.4.26"
 thiserror = "2.0.11"

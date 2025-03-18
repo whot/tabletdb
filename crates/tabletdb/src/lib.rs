@@ -102,7 +102,6 @@
 //! to remove this dependency in future versions.
 //! </div>
 
-use bitflags::bitflags;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -288,9 +287,10 @@ impl CacheBuilder {
                     Ok(Tool::Mouse(Mouse {
                         idx,
                         id: s.id,
-                        axes: s.axes,
+                        axes: s.axes.clone(),
                         name: s.name.clone(),
                         buttons: (0..s.num_buttons).map(|_| ToolButton {}).collect(),
+                        has_lens: s.has_lens,
                     }))
                 } else {
                     let st = match s.tool_type {
@@ -313,7 +313,7 @@ impl CacheBuilder {
                         id: s.id,
                         stylus_type: st,
                         eraser_type: s.eraser_type,
-                        axes: s.axes,
+                        axes: s.axes.clone(),
                         name: s.name.clone(),
                         buttons: (0..s.num_buttons).map(|_| ToolButton {}).collect(),
                     };
@@ -332,7 +332,7 @@ impl CacheBuilder {
                                 idx,
                                 id: e.id,
                                 eraser_type: e.eraser_type.unwrap(),
-                                axes: e.axes,
+                                axes: e.axes.clone(),
                                 name: e.name.clone(),
                                 buttons: Vec::new(),
                             })
@@ -1343,18 +1343,15 @@ enum EraserType {
     Button,
 }
 
-bitflags! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub(crate) struct AxisTypes: u32 {
-        const None = 0;
-        const Pressure = 1 << 0;
-        const Tilt = 1 << 1;
-        const Distance = 1 << 2;
-        const Slider = 1 << 3;
-        const RotationZ = 1 << 4;
-        const Lens = 1 << 5;
-        const Wheel = 1 << 6;
-    }
+/// A supported axis type
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Axis {
+    Pressure,
+    Tilt,
+    Distance,
+    Slider,
+    RotationZ,
+    Wheel,
 }
 
 /// A button on a tool
@@ -1374,11 +1371,7 @@ pub trait ToolFeatures {
     fn tool_id(&self) -> ToolId;
     fn buttons(&self) -> impl Iterator<Item = &ToolButton>;
 
-    fn has_tilt(&self) -> bool;
-    fn has_pressure(&self) -> bool;
-    fn has_distance(&self) -> bool;
-    fn has_rotation(&self) -> bool;
-    fn has_slider(&self) -> bool;
+    fn axes(&self) -> &[Axis];
 }
 
 /// A physical tool that may be used on a device.
@@ -1445,8 +1438,9 @@ pub struct Mouse {
     idx: usize,
     name: String,
     id: StylusId,
-    axes: AxisTypes,
+    axes: Vec<Axis>,
     buttons: Vec<ToolButton>,
+    has_lens: bool,
 }
 
 impl ToolFeatures for Mouse {
@@ -1470,20 +1464,8 @@ impl ToolFeatures for Mouse {
     fn tool_id(&self) -> ToolId {
         self.id.pid
     }
-    fn has_tilt(&self) -> bool {
-        self.axes.contains(AxisTypes::Tilt)
-    }
-    fn has_pressure(&self) -> bool {
-        self.axes.contains(AxisTypes::Pressure)
-    }
-    fn has_distance(&self) -> bool {
-        self.axes.contains(AxisTypes::Distance)
-    }
-    fn has_rotation(&self) -> bool {
-        self.axes.contains(AxisTypes::RotationZ)
-    }
-    fn has_slider(&self) -> bool {
-        self.axes.contains(AxisTypes::Slider)
+    fn axes(&self) -> &[Axis] {
+        &self.axes
     }
     /// The buttons on this Mouse
     fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
@@ -1493,10 +1475,7 @@ impl ToolFeatures for Mouse {
 
 impl Mouse {
     pub fn has_lens(&self) -> bool {
-        self.axes.contains(AxisTypes::Lens)
-    }
-    pub fn has_wheel(&self) -> bool {
-        self.axes.contains(AxisTypes::Wheel)
+        self.has_lens
     }
 }
 
@@ -1515,7 +1494,7 @@ pub struct Eraser {
     name: String,
     id: StylusId,
     eraser_type: EraserType,
-    axes: AxisTypes,
+    axes: Vec<Axis>,
     buttons: Vec<ToolButton>,
 }
 
@@ -1540,20 +1519,8 @@ impl ToolFeatures for Eraser {
     fn tool_id(&self) -> ToolId {
         self.id.pid
     }
-    fn has_tilt(&self) -> bool {
-        self.axes.contains(AxisTypes::Tilt)
-    }
-    fn has_pressure(&self) -> bool {
-        self.axes.contains(AxisTypes::Pressure)
-    }
-    fn has_distance(&self) -> bool {
-        self.axes.contains(AxisTypes::Distance)
-    }
-    fn has_rotation(&self) -> bool {
-        self.axes.contains(AxisTypes::RotationZ)
-    }
-    fn has_slider(&self) -> bool {
-        self.axes.contains(AxisTypes::Slider)
+    fn axes(&self) -> &[Axis] {
+        &self.axes
     }
     /// The buttons on this Eraser, if any
     fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
@@ -1570,7 +1537,7 @@ pub struct Stylus {
     stylus_type: StylusType,
     eraser_type: Option<EraserType>,
     buttons: Vec<ToolButton>,
-    axes: AxisTypes,
+    axes: Vec<Axis>,
 }
 
 impl ToolFeatures for Stylus {
@@ -1587,20 +1554,8 @@ impl ToolFeatures for Stylus {
     fn tool_id(&self) -> ToolId {
         self.id.pid
     }
-    fn has_tilt(&self) -> bool {
-        self.axes.contains(AxisTypes::Tilt)
-    }
-    fn has_pressure(&self) -> bool {
-        self.axes.contains(AxisTypes::Pressure)
-    }
-    fn has_distance(&self) -> bool {
-        self.axes.contains(AxisTypes::Distance)
-    }
-    fn has_rotation(&self) -> bool {
-        self.axes.contains(AxisTypes::RotationZ)
-    }
-    fn has_slider(&self) -> bool {
-        self.axes.contains(AxisTypes::Slider)
+    fn axes(&self) -> &[Axis] {
+        &self.axes
     }
     /// The buttons on this Stylus
     ///
