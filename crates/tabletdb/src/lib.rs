@@ -1334,6 +1334,25 @@ pub enum StylusType {
     Mobile,
 }
 
+impl std::fmt::Display for StylusType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                StylusType::General => "General",
+                StylusType::Inking => "Inking",
+                StylusType::Airbrush => "Airbrush",
+                StylusType::Classic => "Classic",
+                StylusType::Marker => "Marker",
+                StylusType::Stroke => "Stroke",
+                StylusType::Pen3D => "Pen3D",
+                StylusType::Mobile => "Mobile",
+            }
+        )
+    }
+}
+
 /// Type of eraser on a stylus
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum EraserType {

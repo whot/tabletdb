@@ -170,12 +170,23 @@ fn cmd_list_styli() -> Result<()> {
     let mut tools: Vec<&Tool> = cache.tools().collect();
     tools.sort_by_key(|s| format!("{:04x}:{:08x}", s.vendor_id(), s.tool_id()));
 
-    for tool in tools.iter() {
-        let mut components = Vec::new();
+    let namelen = tools
+        .iter()
+        .max_by_key(|t| t.name().len())
+        .map(|t| t.name().len())
+        .unwrap_or(0);
 
+    for tool in tools.iter() {
+        let name = format!(
+            "name: '{}',{:width$}",
+            tool.name(),
+            ' ',
+            width = 1 + namelen - tool.name().len()
+        );
+
+        let mut components = Vec::new();
         components.push(format!("vid: '0x{:04x}'", tool.vendor_id()));
         components.push(format!("pid: '0x{:08x}'", tool.tool_id()));
-        components.push(format!("name: '{}'", tool.name()));
         let axes = tool
             .axes()
             .iter()
@@ -188,9 +199,28 @@ fn cmd_list_styli() -> Result<()> {
                 Axis::Slider => "s",
             })
             .collect::<Vec<&str>>();
-        components.push(format!("axes: '{}'", axes.join("")));
+        components.push(format!("axes: '{:width$}'", axes.join(""), width = 4));
+        components.push(format!("buttons: {}", tool.buttons().len()));
 
-        println!("- {{ {} }}", components.join(", "));
+        match tool {
+            Tool::Mouse(m) => {
+                if m.has_lens() {
+                    components.push(format!("lens: {}", m.has_lens()))
+                }
+            }
+            Tool::Stylus(s) => {
+                components.push(format!("type: {}", s.stylus_type()));
+                if s.has_eraser_button() {
+                    components.push(format!("eraser-button: {}", s.has_eraser_button()));
+                }
+            }
+            Tool::StylusWithEraser(s, e) => {
+                components.push(format!("type: {}", s.stylus_type()));
+                components.push(format!("eraser: {{ pid: 0x{:08x} }}", e.tool_id()));
+            }
+        }
+
+        println!("- {{ {name} {} }}", components.join(", "));
     }
 
     Ok(())
