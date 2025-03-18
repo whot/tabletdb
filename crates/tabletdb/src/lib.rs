@@ -290,7 +290,7 @@ impl CacheBuilder {
                         id: s.id,
                         axes: s.axes,
                         name: s.name.clone(),
-                        num_buttons: s.num_buttons,
+                        buttons: (0..s.num_buttons).map(|_| ToolButton {}).collect(),
                     }))
                 } else {
                     let st = match s.tool_type {
@@ -315,7 +315,7 @@ impl CacheBuilder {
                         eraser_type: s.eraser_type,
                         axes: s.axes,
                         name: s.name.clone(),
-                        num_buttons: s.num_buttons,
+                        buttons: (0..s.num_buttons).map(|_| ToolButton {}).collect(),
                     };
                     // This is really bad in the data files. A tool
                     // without a paired ID is always a stylus or an
@@ -334,6 +334,7 @@ impl CacheBuilder {
                                 eraser_type: e.eraser_type.unwrap(),
                                 axes: e.axes,
                                 name: e.name.clone(),
+                                buttons: Vec::new(),
                             })
                             .take(1)
                             .next()
@@ -1356,6 +1357,13 @@ bitflags! {
     }
 }
 
+/// A button on a tool
+///
+/// This is currently a placeholder struct only but it may
+/// get fields and methods in the future.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolButton {}
+
 pub trait ToolFeatures {
     /// The name of this tool given by the manufacturer,
     /// e.g. "Grip Pen". This name is suitable for presentation.
@@ -1364,6 +1372,7 @@ pub trait ToolFeatures {
     fn name(&self) -> &str;
     fn vendor_id(&self) -> VendorId;
     fn tool_id(&self) -> ToolId;
+    fn buttons(&self) -> impl Iterator<Item = &ToolButton>;
 
     fn has_tilt(&self) -> bool;
     fn has_pressure(&self) -> bool;
@@ -1437,7 +1446,7 @@ pub struct Mouse {
     name: String,
     id: StylusId,
     axes: AxisTypes,
-    num_buttons: usize,
+    buttons: Vec<ToolButton>,
 }
 
 impl ToolFeatures for Mouse {
@@ -1476,6 +1485,10 @@ impl ToolFeatures for Mouse {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
+    /// The buttons on this Mouse
+    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
+        self.buttons.iter()
+    }
 }
 
 impl Mouse {
@@ -1484,9 +1497,6 @@ impl Mouse {
     }
     pub fn has_wheel(&self) -> bool {
         self.axes.contains(AxisTypes::Wheel)
-    }
-    pub fn num_buttons(&self) -> usize {
-        self.num_buttons
     }
 }
 
@@ -1497,6 +1507,7 @@ pub struct Eraser {
     id: StylusId,
     eraser_type: EraserType,
     axes: AxisTypes,
+    buttons: Vec<ToolButton>,
 }
 
 impl ToolFeatures for Eraser {
@@ -1535,6 +1546,10 @@ impl ToolFeatures for Eraser {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
+    /// The buttons on this Eraser, if any
+    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
+        self.buttons.iter()
+    }
 }
 
 /// A stylus describes one stylus-like tool available on a tablet.
@@ -1545,7 +1560,7 @@ pub struct Stylus {
     id: StylusId,
     stylus_type: StylusType,
     eraser_type: Option<EraserType>,
-    num_buttons: usize,
+    buttons: Vec<ToolButton>,
     axes: AxisTypes,
 }
 
@@ -1578,6 +1593,17 @@ impl ToolFeatures for Stylus {
     fn has_slider(&self) -> bool {
         self.axes.contains(AxisTypes::Slider)
     }
+    /// The buttons on this Stylus
+    ///
+    /// Note that many styli have an [eraser button](Stylus::has_eraser_button)
+    /// that the firmware enforces eraser-like behavior for,
+    /// see the
+    /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
+    /// for details.
+    /// This button is excluded from the number of buttons.
+    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
+        self.buttons.iter()
+    }
 }
 
 impl Stylus {
@@ -1587,17 +1613,6 @@ impl Stylus {
     /// for details.
     pub fn has_eraser_button(&self) -> bool {
         !self.eraser_type.is_none_or(|t| t != EraserType::Button)
-    }
-    /// The number of buttons on this Stylus
-    ///
-    /// Note that many styli have an [eraser button](Stylus::has_eraser_button)
-    /// that the firmware enforces eraser-like behavior for,
-    /// see the
-    /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
-    /// for details.
-    /// This button is excluded from the number of buttons.
-    pub fn num_buttons(&self) -> usize {
-        self.num_buttons
     }
 
     pub fn stylus_type(&self) -> StylusType {
