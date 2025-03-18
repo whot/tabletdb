@@ -241,7 +241,7 @@ fn cmd_info(
 
     let cache = tabletdb::Cache::new()?;
     let mut tablets = cache.tablets().filter(|t| *t == &info).peekable();
-    if tablets.next().is_none() {
+    if tablets.peek().is_none() {
         println!("Not a known tablet device");
         return Ok(());
     }
