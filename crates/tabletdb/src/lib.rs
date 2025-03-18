@@ -1369,8 +1369,7 @@ pub trait ToolFeatures {
     fn name(&self) -> &str;
     fn vendor_id(&self) -> VendorId;
     fn tool_id(&self) -> ToolId;
-    fn buttons(&self) -> impl Iterator<Item = &ToolButton>;
-
+    fn buttons(&self) -> &[ToolButton];
     fn axes(&self) -> &[Axis];
 }
 
@@ -1468,8 +1467,8 @@ impl ToolFeatures for Mouse {
         &self.axes
     }
     /// The buttons on this Mouse
-    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
-        self.buttons.iter()
+    fn buttons(&self) -> &[ToolButton] {
+        &self.buttons
     }
 }
 
@@ -1523,8 +1522,8 @@ impl ToolFeatures for Eraser {
         &self.axes
     }
     /// The buttons on this Eraser, if any
-    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
-        self.buttons.iter()
+    fn buttons(&self) -> &[ToolButton] {
+        &self.buttons
     }
 }
 
@@ -1565,8 +1564,8 @@ impl ToolFeatures for Stylus {
     /// [Windows Pen States](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states)
     /// for details.
     /// This button is excluded from the number of buttons.
-    fn buttons(&self) -> impl Iterator<Item = &ToolButton> {
-        self.buttons.iter()
+    fn buttons(&self) -> &[ToolButton] {
+        &self.buttons
     }
 }
 
