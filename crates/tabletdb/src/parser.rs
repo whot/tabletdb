@@ -225,8 +225,14 @@ impl TryFrom<&str> for DeviceMatch {
             .map_err(|_| parser_error!(s))?
             .into();
 
-        let name: Option<String> = components.get(3).map(|name| String::from(*name));
-        let fw: Option<String> = components.get(4).map(|fw| String::from(*fw));
+        let name: Option<String> = components
+            .get(3)
+            .filter(|s| !s.is_empty())
+            .map(|name| String::from(*name));
+        let fw: Option<String> = components
+            .get(4)
+            .filter(|s| !s.is_empty())
+            .map(|fw| String::from(*fw));
 
         Ok(DeviceMatch {
             bustype,
