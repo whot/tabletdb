@@ -154,7 +154,7 @@ fn cmd_list_tablets() -> Result<()> {
 
     for tablet in tablets {
         println!(
-            "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}'{} }}",
+            "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}'{}{}}}",
             format!("'{}',", tablet.bustype()),
             *tablet.vendor_id(),
             tablet.product_id(),
@@ -166,7 +166,11 @@ fn cmd_list_tablets() -> Result<()> {
                     ' ',
                     width = namelen - tablet.name().len()
                 ))
-                .unwrap_or("".into())
+                .unwrap_or("".into()),
+            tablet
+                .kernel_name()
+                .map(|n| format!(", kernel: '{n}'"))
+                .unwrap_or("".into()),
         );
     }
 
