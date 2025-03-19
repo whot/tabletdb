@@ -146,6 +146,12 @@ fn cmd_list_tablets() -> Result<()> {
         )
     });
 
+    let namelen = tablets
+        .iter()
+        .max_by_key(|t| t.name().len())
+        .map(|t| t.name().len())
+        .unwrap_or(0);
+
     for tablet in tablets {
         println!(
             "- {{ bus: {:<11} vid: '0x{:04x}', pid: '0x{:04x}', name: '{}'{} }}",
@@ -155,7 +161,11 @@ fn cmd_list_tablets() -> Result<()> {
             tablet.name(),
             tablet
                 .firmware_version()
-                .map(|fw| format!(", uniq: '{fw}'"))
+                .map(|fw| format!(
+                    ", {:<width$}uniq: '{fw}'",
+                    ' ',
+                    width = namelen - tablet.name().len()
+                ))
                 .unwrap_or("".into())
         );
     }
