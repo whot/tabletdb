@@ -1296,13 +1296,15 @@ impl Tablet {
     /// unique match, e.g. only setting the [TabletInfo::bustype()] will
     /// match against any device with that bustype.
     pub fn matches(&self, info: &TabletInfo) -> bool {
-        (info.bustype.is_none() || self.bustype == info.bustype.unwrap())
-            && (info.vid.is_none() || self.vid == info.vid.unwrap())
-            && (info.pid.is_none() || self.pid == info.pid.unwrap())
-            && (info.name.is_none() || &self.name == info.name.as_ref().unwrap())
-            && (info.kernel_name.is_none()
-                || self.kernel_name.is_none()
-                || self.kernel_name == info.kernel_name)
+        info.bustype.map(|b| b == self.bustype).unwrap_or(true)
+            && info.vid.map(|v| v == self.vid).unwrap_or(true)
+            && info.pid.map(|p| p == self.pid).unwrap_or(true)
+            && info.name.as_ref().map(|n| n == &self.name).unwrap_or(true)
+            && info
+                .kernel_name
+                .as_ref()
+                .map(|n| self.kernel_name.as_ref().map(|kn| n == kn).unwrap_or(true))
+                .unwrap_or(true)
     }
 }
 
