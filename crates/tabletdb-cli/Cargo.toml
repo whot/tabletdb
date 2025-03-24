@@ -2,6 +2,7 @@
 name = "tabletdb-cli"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/whot/tabletdb"
 license = "MIT"
 description = "A CLI to interact with the tabletdb"
 keywords = ["tablet", "wacom", "cli", "linux", "wayland"]

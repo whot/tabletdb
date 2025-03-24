@@ -2,6 +2,7 @@
 name = "tabletdb"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/whot/tabletdb"
 license = "MIT"
 description = "A database of auxiliary information about graphics tablets"
 keywords = ["tablet", "wacom", "cli", "linux", "wayland"]
