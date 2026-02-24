@@ -150,6 +150,18 @@ fn lookup_evdev_code(s: &str) -> Result<EvdevCode> {
             "BTN_MODE" => 0x13c,
             "BTN_THUMBL" => 0x13d,
             "BTN_THUMBR" => 0x13e,
+            "BTN_TRIGGER" => 0x120,
+            "BTN_THUMB" => 0x121,
+            "BTN_THUMB2" => 0x122,
+            "BTN_TOP" => 0x123,
+            "BTN_TOP2" => 0x124,
+            "BTN_PINKIE" => 0x125,
+            "BTN_BASE" => 0x126,
+            "BTN_BASE2" => 0x127,
+            "BTN_BASE3" => 0x128,
+            "BTN_BASE4" => 0x129,
+            "BTN_BASE5" => 0x12a,
+            "BTN_BASE6" => 0x12b,
             _ => {
                 return Err(parser_error!(
                     "EvdevCode",
