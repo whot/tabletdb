@@ -406,7 +406,7 @@ impl TabletFile {
         // Note: OLEDs intentionally omitted
 
         let evdev_codes: Vec<EvdevCode> = data
-            .get("Buttons", "EvdevCode")
+            .get("Buttons", "EvdevCodes")
             .map(|s| s.split(";").map(String::from).collect::<Vec<String>>())
             .iter()
             .flatten()
