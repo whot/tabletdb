@@ -476,7 +476,7 @@ impl TabletFile {
         let mut dials: Vec<Dial> = Vec::new();
         for (count, feature, name, alt_name) in [
             (num_rings, FeatureType::Ring, "Ring", None),
-            (num_strips, FeatureType::Strip, "Touchstrip", Some("Strips")),
+            (num_strips, FeatureType::Strip, "Strip", Some("Strips")),
             (num_dials, FeatureType::Dial, "Dial", None),
         ] {
             for num in 1..=count {
