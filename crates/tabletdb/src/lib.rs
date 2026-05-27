@@ -411,6 +411,7 @@ impl Default for CacheBuilder {
 }
 
 /// The bustype of this device
+#[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum BusType {
     USB,

@@ -326,6 +326,7 @@ fn cmd_info(
                 BusType::Bluetooth => "bluetooth",
                 BusType::Serial => "serial",
                 BusType::I2C => "i2c",
+                _ => "unknown",
             }
         );
         println!("  vid: \"0x{:04x}\"", tablet.vendor_id());
